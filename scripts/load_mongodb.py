@@ -94,6 +94,7 @@ def load_platform_dir(platform_dir: Path, collection) -> tuple[int, int]:
                     file_skipped += 1
                     continue
 
+                doc.pop("subtopics", None)  # subtopics live in project document_proxies, not in documents
                 batch.append(doc)
 
                 if len(batch) >= BATCH_SIZE:
@@ -119,10 +120,10 @@ def create_indexes(db) -> None:
     db.documents.create_index("country")
     db.documents.create_index("published_time")
     db.documents.create_index("acteu_topic.label")
-    db.documents.create_index("subtopics.topic_id")
     db.topics.create_index("topic_id", unique=True)
     db.users.create_index("username", unique=True)
-    db.classifiers.create_index("owner_id")
+    db.projects.create_index("project_id", unique=True)
+    db.projects.create_index("owner_id")
     print("Indexes created.")
 
 

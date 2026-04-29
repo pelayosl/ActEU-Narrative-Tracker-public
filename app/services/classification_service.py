@@ -9,8 +9,8 @@ class ClassificationService:
     def __init__(self, job_queue: JobQueueService) -> None:
         self._job_queue = job_queue
 
-    def submit_training(self, topics: list[Topic], doc_ids: list[str]) -> str:
+    def submit_training(self, topics: list[Topic], doc_ids: list[str], project_id: str) -> str:
         raise NotImplementedError
 
-    def submit_labelling(self, classifier_id: str, query: SearchQuery) -> str:
+    def submit_labelling(self, project_id: str, classifier_id: str, query: SearchQuery) -> str:
         raise NotImplementedError

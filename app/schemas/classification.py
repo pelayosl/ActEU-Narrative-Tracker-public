@@ -7,13 +7,25 @@ from app.schemas.topic import Topic
 
 class ClassifierMetadata(BaseModel):
     classifier_id: str
-    owner_id: str
     topics: list[Topic]
     file_path: str
     created_at: datetime
 
 
-class LabellingResult(BaseModel):
+class ProxyLabel(BaseModel):
+    topic_id: str
+    name: str
+    description: str
     classifier_id: str
+    confidence: float | None = None
+
+
+class DocumentProxy(BaseModel):
+    doc_id: str
+    labels: list[ProxyLabel] = []
+
+
+class LabellingResult(BaseModel):
+    project_id: str
     total_labelled: int
     topic_summary: dict[str, int]

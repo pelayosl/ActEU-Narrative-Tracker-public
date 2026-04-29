@@ -11,6 +11,7 @@ router = APIRouter(prefix="/classification", tags=["classification"])
 async def train_classifier(
     topics: list[Topic],
     doc_ids: list[str],
+    project_id: str,
     service: ClassificationService = Depends(),
 ) -> dict:
     raise NotImplementedError
@@ -18,6 +19,7 @@ async def train_classifier(
 
 @router.post("/label")
 async def label_documents(
+    project_id: str,
     classifier_id: str,
     query: SearchQuery,
     service: ClassificationService = Depends(),

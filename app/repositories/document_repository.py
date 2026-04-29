@@ -16,8 +16,5 @@ class DocumentRepository:
     async def count(self, query: SearchQuery) -> int:
         raise NotImplementedError
 
-    async def update_labels(self, doc_id: str, labels: dict) -> None:
-        raise NotImplementedError
-
     async def get_excerpt(self, doc_id: str) -> str:
         raise NotImplementedError
