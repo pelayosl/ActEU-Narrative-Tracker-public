@@ -19,7 +19,7 @@ class ProjectRepository:
             upsert=True
         )
 
-    async def find_by_id(self, project_id: str) -> BaseModel | None:
+    async def find_by_id(self, project_id: str) -> Project | None:
         doc = await self._collection.find_one({"project_id": project_id})
         if doc:
             return Project.model_validate(doc)
@@ -38,7 +38,7 @@ class ProjectRepository:
             {"$push": {"classifiers": classifier.model_dump()}}
         )
 
-    async def find_classifier(self, project_id: str, classifier_id: str) -> BaseModel | None:
+    async def find_classifier(self, project_id: str, classifier_id: str) -> ClassifierMetadata | None:
         doc = await self._collection.find_one(
             {"project_id": project_id, "classifiers.classifier_id": classifier_id},
             {"classifiers.$": 1}

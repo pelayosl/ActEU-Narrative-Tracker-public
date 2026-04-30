@@ -7,5 +7,4 @@ class Topic(BaseModel):
     topic_id: str
     name: str
     description: str
-    doc_ids: list[str] = []
-    origin_topics: list[Topic] | None = None
+    core_topic: str
