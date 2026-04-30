@@ -1,0 +1,23 @@
+from pydantic import BaseModel
+
+
+class User(BaseModel):
+    user_id: str
+    name: str
+    surname: str
+    username: str
+    hashed_pswd: str
+    role: str
+
+
+class AuthToken(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class RegistrationForm(BaseModel):
+    name: str
+    surname: str
+    username: str
+    password: str
+    role: str
