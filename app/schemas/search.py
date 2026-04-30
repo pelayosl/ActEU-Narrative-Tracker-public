@@ -7,7 +7,7 @@ class SearchQuery(BaseModel):
     keywords: list[str] = []
     date_from: datetime | None = None
     date_to: datetime | None = None
-    countries: list[str] = []
+    languages: list[str] = []
     platforms: list[str] = []
     topics: list[str] = []
     subtopics: list[str] = []
@@ -18,7 +18,7 @@ class DocumentSummary(BaseModel):
     headline: str
     excerpt: str
     platform: str
-    country: str
+    language: str
     date: datetime
     relevant_topics: list[str] = []
 
