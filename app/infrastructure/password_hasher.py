@@ -1,8 +1,10 @@
+import bcrypt
+
 class PasswordHasher:
-    """Adapter over bcrypt/passlib."""
+    """Adapter over bcrypt."""
 
     def hash(self, password: str) -> str:
-        raise NotImplementedError
+        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     def verify(self, password: str, hashed: str) -> bool:
-        raise NotImplementedError
+        return bcrypt.checkpw(password.encode(), hashed.encode())
