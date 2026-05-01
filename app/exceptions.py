@@ -1,0 +1,19 @@
+class InvalidCredentials(Exception):
+    pass
+
+
+class UserNotFound(Exception):
+    pass
+
+
+class UsernameTaken(Exception):
+    def __init__(self, username):
+        super().__init__(f"Username '{username}' is already taken")
+
+
+class TokenExpired(Exception):
+    pass
+
+
+class InvalidToken(Exception):
+    pass

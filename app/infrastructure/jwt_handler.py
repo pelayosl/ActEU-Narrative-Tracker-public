@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 
 from app.config import settings
+from app.exceptions import InvalidToken, TokenExpired
 
 
 class JWTHandler:
@@ -14,4 +15,9 @@ class JWTHandler:
         return jwt.encode(data, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
     def decode(self, token: str) -> dict:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        try:
+            return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        except jwt.ExpiredSignatureError:
+            raise TokenExpired()
+        except jwt.InvalidTokenError:
+            raise InvalidToken()
