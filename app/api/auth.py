@@ -1,27 +1,31 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.exceptions import InvalidCredentials, InvalidToken, TokenExpired, UsernameTaken
-from app.schemas.auth import AuthToken, RegistrationForm, User
+from app.api.dependencies import get_auth_service, get_current_admin
+from app.exceptions import InvalidCredentials, UsernameTaken
+from app.schemas.auth import AuthToken, LoginForm, RegistrationForm, User, UserPublic
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/login", response_model=AuthToken)
+
+@router.post("/login")
 async def login(
-    username: str,
-    password: str,
-    service: AuthService = Depends(),
+    form: LoginForm,
+    service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> AuthToken:
     try:
-        return await service.login(username, password)
+        return await service.login(form.username, form.password)
     except InvalidCredentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 
-@router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
 async def register(
     form: RegistrationForm,
-    service: AuthService = Depends(),
+    service: Annotated[AuthService, Depends(get_auth_service)],
+    _: Annotated[User, Depends(get_current_admin)],
 ) -> User:
     try:
         return await service.register_user(form)
