@@ -1,9 +1,10 @@
 """
 MongoDB loader script — ActEU Narrative Tracker
 Reads transformed ndjson files organised by platform/country and bulk-inserts
-them into MongoDB. Also seeds the topics collection with the three core topics.
+them into MongoDB. Also seeds the topics collection with the three core topics,
+an admin user, and a starter project.
 
-Assumes a clean database — does NOT skip duplicates.
+This script DROPS the target database before loading.
 
 Directory structure expected:
     DATA_DIR/
@@ -22,16 +23,41 @@ Usage:
 """
 
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from pymongo import MongoClient
+from app.infrastructure.password_hasher import PasswordHasher
+
+ENV_PATH = Path(".env")
+
+
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"").strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_env_file(ENV_PATH)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-MONGO_URI = "mongodb://localhost:27017"
-DB_NAME = "acteu_dev"
-DATA_DIR = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db")
+MONGO_URI = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+DB_NAME = os.getenv("MONGODB_DB", "acteu_dev")
+DATA_DIR = Path(
+    os.getenv("DATA_DIR", "C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db")
+)
 BATCH_SIZE = 500  # documents per bulk insert
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -60,6 +86,12 @@ CORE_TOPICS = [
         "created_at": datetime.now(timezone.utc),
     },
 ]
+
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_NAME = os.getenv("ADMIN_NAME", "Admin")
+ADMIN_SURNAME = os.getenv("ADMIN_SURNAME", "User")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+ADMIN_PROJECT_NAME = os.getenv("ADMIN_PROJECT_NAME", "Default Project")
 
 
 def load_platform_dir(platform_dir: Path, collection) -> tuple[int, int]:
@@ -133,8 +165,43 @@ def seed_core_topics(db) -> None:
     print(f"  → Inserted {len(CORE_TOPICS)} core topics.")
 
 
+def seed_admin_and_project(db) -> None:
+    if not ADMIN_PASSWORD:
+        raise ValueError("ADMIN_PASSWORD is required (set it in .env or env vars).")
+
+    hasher = PasswordHasher()
+    user_id = str(uuid.uuid4())
+    project_id = str(uuid.uuid4())
+
+    admin_user = {
+        "user_id": user_id,
+        "name": ADMIN_NAME,
+        "surname": ADMIN_SURNAME,
+        "username": ADMIN_USERNAME,
+        "hashed_password": hasher.hash(ADMIN_PASSWORD),
+        "role": "admin",
+    }
+
+    project = {
+        "project_id": project_id,
+        "owner_id": user_id,
+        "name": ADMIN_PROJECT_NAME,
+        "created_at": datetime.now(timezone.utc),
+        "classifiers": [],
+        "document_proxies": [],
+    }
+
+    print("\nSeeding admin user and starter project...")
+    db.users.insert_one(admin_user)
+    db.projects.insert_one(project)
+    print("  → Inserted admin user and project.")
+
+
 def main() -> None:
     client = MongoClient(MONGO_URI)
+
+    print(f"Dropping database: {DB_NAME}")
+    client.drop_database(DB_NAME)
     db = client[DB_NAME]
 
     print(f"Connected to MongoDB: {MONGO_URI}")
@@ -155,6 +222,7 @@ def main() -> None:
         grand_total_skipped += skipped
 
     seed_core_topics(db)
+    seed_admin_and_project(db)
     create_indexes(db)
 
     print(f"\n{'='*40}")
