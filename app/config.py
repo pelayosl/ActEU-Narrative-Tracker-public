@@ -5,7 +5,7 @@ DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 
 class Settings(BaseSettings):
     MONGODB_URL: str = "mongodb://localhost:27017"
-    MONGODB_DB: str = "acteu"
+    MONGODB_DB: str = "acteu_dev"
     REDIS_URL: str = DEFAULT_REDIS_URL
     CELERY_BROKER_URL: str = DEFAULT_REDIS_URL
     CELERY_RESULT_BACKEND: str = DEFAULT_REDIS_URL

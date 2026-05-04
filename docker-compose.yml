@@ -21,6 +21,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DATA_DIR: /data/db_import
+    volumes:
+      - ${DATA_DIR}:/data/db_import:ro
     depends_on:
       - mongo
       - redis
@@ -29,11 +32,6 @@ services:
     build: .
     command: celery -A app.tasks.celery_app worker --loglevel=info
     env_file: .env
-    environment:
-      MONGODB_URL: mongodb://mongo:27017
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
       - mongo
       - redis
