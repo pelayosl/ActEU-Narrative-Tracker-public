@@ -17,3 +17,11 @@ class TokenExpired(Exception):
 
 class InvalidToken(Exception):
     pass
+
+
+class ProjectNotFound(Exception):
+    pass
+
+
+class ProjectAccessDenied(Exception):
+    pass

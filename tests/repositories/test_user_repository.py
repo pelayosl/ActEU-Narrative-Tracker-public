@@ -36,10 +36,17 @@ async def repo(db):
 
 class TestFindByUsername:
 	async def test_returns_none_when_missing(self, repo):
+		'''
+		Checks that searching for a non-existent username returns None
+		'''
 		result = await repo.find_by_username("missing")
 		assert result is None
 
 	async def test_maps_hashed_password_field(self, db, repo):
+		'''
+		Inserts a user with a hashed_password field and verifies that the repository 
+		correctly maps it to the hashed_pswd attribute in the returned User object.
+		'''
 		payload = {
 			"user_id": "user-1",
 			"name": "Luis",
@@ -67,6 +74,10 @@ class TestFindByUsername:
 
 class TestSave:
 	async def test_inserts_document_with_hashed_password(self, db, repo):
+		'''
+		Saves a new user and checks that all fields are correctly stored 
+		in the database, with hashed_pswd mapped to hashed_password.
+		'''
 		user = make_user()
 
 		await repo.save(user)
@@ -82,6 +93,11 @@ class TestSave:
 		assert doc["role"] == user.role
 
 	async def test_updates_existing_document_by_user_id(self, db, repo):
+		'''
+		Saves a user, then saves another user with the same user_id but 
+		different data, and checks that the document is updated (not duplicated) 
+		and all fields reflect the new data.
+		'''
 		original = make_user()
 		await repo.save(original)
 

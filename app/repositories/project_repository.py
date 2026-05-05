@@ -53,6 +53,24 @@ class ProjectRepository:
             return [ClassifierMetadata.model_validate(c) for c in doc["classifiers"]]
         return []
 
+    async def find_proxy_doc_ids_by_subtopics(
+        self, project_id: str, doc_ids: list[str], subtopics: list[str]
+    ) -> list[str]:
+        doc = await self._collection.find_one(
+            {"project_id": project_id},
+            {"document_proxies": 1}
+        )
+        if not doc:
+            return []
+        doc_ids_set = set(doc_ids)
+        subtopics_set = set(subtopics)
+        return [
+            proxy["doc_id"]
+            for proxy in doc.get("document_proxies", [])
+            if proxy["doc_id"] in doc_ids_set
+            and any(label["topic_id"] in subtopics_set for label in proxy.get("labels", []))
+        ]
+
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
         operations = []
         for proxy in proxies:
