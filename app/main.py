@@ -4,6 +4,7 @@ from app.api import (
     auth,
     classification,
     jobs,
+    projects,
     search,
     topics,
     visualisation,
@@ -12,6 +13,7 @@ from app.api import (
 app = FastAPI(title="ActEU Narrative Tracker")
 
 app.include_router(search.router)
+app.include_router(projects.router)
 app.include_router(topics.router)
 app.include_router(classification.router)
 app.include_router(visualisation.router)

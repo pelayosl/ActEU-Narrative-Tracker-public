@@ -18,7 +18,7 @@ async def search(
     service: Annotated[SearchService, Depends(get_search_service)],
     project_service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
-    project_id: str | None = Query(default=None),
+    project_id: Annotated[str | None, Query(default=None)] = None,
 ) -> SearchResult:
     result = await service.search(query)
 
