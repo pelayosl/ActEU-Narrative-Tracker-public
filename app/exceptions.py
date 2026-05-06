@@ -25,3 +25,7 @@ class ProjectNotFound(Exception):
 
 class ProjectAccessDenied(Exception):
     pass
+
+
+class ClassifierNotFound(Exception):
+    pass

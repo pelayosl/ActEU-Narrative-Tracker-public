@@ -1,4 +1,7 @@
-from app.exceptions import ProjectAccessDenied, ProjectNotFound
+import uuid
+from datetime import datetime, timezone
+
+from app.exceptions import ClassifierNotFound, ProjectAccessDenied, ProjectNotFound
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.topic_repository import TopicRepository
 from app.schemas.classification import ClassifierMetadata, DocumentProxy
@@ -18,26 +21,49 @@ class ProjectService:
         self._topic_repo = topic_repo
 
     async def create_project(self, owner_id: str, name: str) -> Project:
-        raise NotImplementedError
+        project = Project(
+            project_id=str(uuid.uuid4()),
+            owner_id=owner_id,
+            name=name,
+            created_at=datetime.now(timezone.utc),
+        )
+        await self._project_repo.save(project)
+        return project
 
     async def get_project(self, project_id: str) -> Project:
-        raise NotImplementedError
+        project = await self._project_repo.find_by_id(project_id)
+        if project is None:
+            raise ProjectNotFound
+        return project
 
     async def list_projects(self, owner_id: str) -> list[Project]:
-        raise NotImplementedError
+        return await self._project_repo.find_by_owner(owner_id)
 
     async def delete_project(self, project_id: str) -> None:
-        raise NotImplementedError
+        await self._project_repo.delete(project_id)
 
     async def save_classifier(self, project_id: str, classifier: ClassifierMetadata) -> None:
-        raise NotImplementedError
+        await self._project_repo.add_classifier(project_id, classifier)
 
     async def get_classifier(self, project_id: str, classifier_id: str) -> ClassifierMetadata:
-        raise NotImplementedError
+        classifier = await self._project_repo.find_classifier(project_id, classifier_id)
+        if classifier is None:
+            raise ClassifierNotFound
+        return classifier
 
     async def get_available_topics(self, project_id: str) -> list[Topic]:
         """Returns the 3 core topics plus all topics across the project's classifiers."""
-        raise NotImplementedError
+        core_topics = await self._topic_repo.find_all()
+        classifiers = await self._project_repo.find_all_classifiers(project_id)
+
+        seen = {t.topic_id for t in core_topics}
+        subtopics = [
+            topic
+            for classifier in classifiers
+            for topic in classifier.topics
+            if topic.topic_id not in seen and not seen.add(topic.topic_id)
+        ]
+        return core_topics + subtopics
 
     async def verify_project_owner(self, project_id: str, user_id: str) -> None:
         """Raises ProjectNotFound or ProjectAccessDenied if the user does not own the project."""
@@ -54,4 +80,4 @@ class ProjectService:
         return await self._project_repo.find_proxy_doc_ids_by_subtopics(project_id, doc_ids, subtopics)
 
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
-        raise NotImplementedError
+        await self._project_repo.upsert_document_proxies(project_id, proxies)
