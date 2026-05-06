@@ -12,4 +12,11 @@ async def stream_job(
     job_id: str,
     job_queue: JobQueueService = Depends(get_job_queue),
 ) -> EventSourceResponse:
-    raise NotImplementedError
+    '''
+    SSE endpoint the frontend connects to after receiving a job_id
+    '''
+    async def event_generator():
+        async for job_status in job_queue.stream_progress(job_id):
+            yield {"data": job_status.model_dump_json()}
+
+    return EventSourceResponse(event_generator())

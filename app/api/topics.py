@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies import get_topic_modelling_service
@@ -10,7 +12,7 @@ router = APIRouter(prefix="/topics", tags=["topics"])
 @router.post("/generate")
 async def generate_topics(
     doc_ids: list[str],
-    service: TopicModellingService = Depends(get_topic_modelling_service),
+    _service: Annotated[TopicModellingService, Depends(get_topic_modelling_service)],
 ) -> dict:
     raise NotImplementedError
 
@@ -18,6 +20,6 @@ async def generate_topics(
 @router.post("/reconcile")
 async def reconcile_topics(
     topics: list[Topic],
-    service: TopicModellingService = Depends(get_topic_modelling_service),
+    _service: Annotated[TopicModellingService, Depends(get_topic_modelling_service)],
 ) -> dict:
     raise NotImplementedError
