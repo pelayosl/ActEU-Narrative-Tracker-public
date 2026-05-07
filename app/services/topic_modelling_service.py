@@ -5,8 +5,14 @@ class TopicModellingService:
     def __init__(self, job_queue: JobQueueService) -> None:
         self._job_queue = job_queue
 
-    def submit_generation(self, doc_ids: list[str]) -> str:
-        raise NotImplementedError
+    def submit_generation(self, doc_ids: list[str], core_topic: str) -> str:
+        return self._job_queue.dispatch(
+            "app.tasks.topic_generation_task.topic_generation_task",
+            {"doc_ids": doc_ids, "core_topic": core_topic},
+        )
 
     def submit_reconciliation(self, topics: list[dict]) -> str:
-        raise NotImplementedError
+        return self._job_queue.dispatch(
+            "app.tasks.reconciliation_task.reconciliation_task",
+            {"topics": topics},
+        )

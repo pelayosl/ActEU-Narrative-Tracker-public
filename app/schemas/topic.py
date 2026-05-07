@@ -8,3 +8,12 @@ class Topic(BaseModel):
     name: str
     description: str
     core_topic: str
+
+
+class GenerateTopicsRequest(BaseModel):
+    doc_ids: list[str]
+    core_topic: str
+
+
+class GenerateTopicsResponse(BaseModel):
+    topics: list[Topic]
