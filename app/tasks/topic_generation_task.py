@@ -141,6 +141,8 @@ def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str]:
         "You are a topic labelling assistant. Given keywords and representative documents "
         "from a multilingual political text cluster, produce a concise topic name and a "
         "one-sentence description in English. The documents may be in any language. Respond ONLY in English.\n\n"
+        "Don't mention the keywords in your description. Your topic answer will substitute the keywords provided by BERTopic, "
+        "and your description must be exclusively centred around providing context to the topic itself.\n\n"
         f"Keywords: {keywords_str}\n\n"
         f"Representative documents:\n{docs_str}\n\n"
         'Respond ONLY with valid JSON: {"name": "...", "description": "..."}'

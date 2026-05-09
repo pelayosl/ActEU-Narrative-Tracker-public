@@ -2,7 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_topic_modelling_service
+from app.api.dependencies import get_current_user, get_topic_modelling_service
+from app.schemas.auth import User
 from app.schemas.topic import GenerateTopicsRequest, Topic
 from app.services.topic_modelling_service import TopicModellingService
 
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/topics", tags=["topics"])
 async def generate_topics(
     body: GenerateTopicsRequest,
     service: Annotated[TopicModellingService, Depends(get_topic_modelling_service)],
+    _: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     job_id = service.submit_generation(body.doc_ids)
     return {"job_id": job_id}
@@ -21,6 +23,8 @@ async def generate_topics(
 @router.post("/reconcile")
 async def reconcile_topics(
     topics: list[Topic],
-    _service: Annotated[TopicModellingService, Depends(get_topic_modelling_service)],
+    service: Annotated[TopicModellingService, Depends(get_topic_modelling_service)],
+    _: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    raise NotImplementedError
+    job_id = service.submit_reconciliation([t.model_dump() for t in topics])
+    return {"job_id": job_id}
