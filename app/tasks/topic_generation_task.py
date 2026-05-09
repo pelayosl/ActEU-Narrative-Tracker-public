@@ -5,6 +5,7 @@ from collections import defaultdict
 
 import httpx
 from bertopic import BERTopic
+from bertopic.representation import BaseRepresentation
 from redis import Redis
 from sentence_transformers import SentenceTransformer
 
@@ -15,8 +16,7 @@ from app.tasks.celery_app import celery_app
 
 _TOPIC_MAPPING_KEY_PREFIX = "topic_map:"
 
-
-class OllamaRepresentation:
+class OllamaRepresentation(BaseRepresentation):
     """BERTopic representation model that labels each cluster via the university LLM.
     After fit_transform, access _labels[bert_topic_id] to get (name, description)."""
 
@@ -45,7 +45,7 @@ class OllamaRepresentation:
                 updated[topic_id] = word_scores
                 continue
             keywords = [w for w, _ in word_scores[:self.KEYWORD_LIMIT]] # limit num. of keywords to reasonable amount
-            rep_docs = topic_model.get_representative_docs(topic_id) # retrieve 3 most representative docs (BERTopic does it)
+            rep_docs = topic_model.get_representative_docs(topic_id) or []
             name, description = _call_ollama(keywords, rep_docs)
             self._labels[topic_id] = (name, description)
             # BERTopic uses the first entry as the display label, we add the rest afterwards
@@ -54,13 +54,13 @@ class OllamaRepresentation:
 
 
 @celery_app.task(bind=True)
-def topic_generation_task(self, doc_ids: list[str], core_topic: str) -> dict:
+def topic_generation_task(self, doc_ids: list[str]) -> dict:
     """Run BERTopic on the given documents and label each topic via the university LLM."""
     job_id = self.request.id
-    return asyncio.run(_run(doc_ids, core_topic, job_id))
+    return asyncio.run(_run(doc_ids, job_id))
 
 
-async def _run(doc_ids: list[str], core_topic: str, job_id: str) -> dict:
+async def _run(doc_ids: list[str], job_id: str) -> dict:
     async with search_service_context() as service:
         docs = await service.get_documents_by_ids(doc_ids)
 
@@ -75,6 +75,11 @@ async def _run(doc_ids: list[str], core_topic: str, job_id: str) -> dict:
         _store_topic_mapping(job_id, {})
         return GenerateTopicsResponse(topics=[]).model_dump()
 
+    if len(text_doc_pairs) < 2:
+        # Too few documents to cluster safely.
+        _store_topic_mapping(job_id, {})
+        return GenerateTopicsResponse(topics=[]).model_dump()
+
     texts = [text for text, _ in text_doc_pairs]
     filtered_doc_ids = [doc_id for _, doc_id in text_doc_pairs]
 
@@ -84,11 +89,12 @@ async def _run(doc_ids: list[str], core_topic: str, job_id: str) -> dict:
     # Phase 2: Embedding cache hooks go here, future implementation
 
     representation = OllamaRepresentation()
+    min_topic_size = max(2, min(10, len(texts) // 10))
     topic_model = BERTopic(
         embedding_model=embedding_model,
         representation_model=representation,
         calculate_probabilities=False,
-        min_topic_size=10,
+        min_topic_size=min_topic_size,
     )
     topic_assignments, _ = topic_model.fit_transform(texts, embeddings)
 
@@ -110,7 +116,6 @@ async def _run(doc_ids: list[str], core_topic: str, job_id: str) -> dict:
                 topic_id=topic_id,
                 name=name,
                 description=description,
-                core_topic=core_topic,
             )
         )
         topic_doc_ids_by_topic[topic_id] = topic_doc_ids.get(bert_topic_id, [])

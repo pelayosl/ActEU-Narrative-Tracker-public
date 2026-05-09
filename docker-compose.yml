@@ -29,9 +29,14 @@ services:
       - redis
 
   worker:
-    build: .
+    build:
+      context: .
+      args:
+        REQUIREMENTS: requirements-nlp.txt
     command: celery -A app.tasks.celery_app worker --loglevel=info
     env_file: .env
+    environment:
+      CELERY_AUTODISCOVER: "1"
     depends_on:
       - mongo
       - redis

@@ -14,7 +14,7 @@ async def generate_topics(
     body: GenerateTopicsRequest,
     service: Annotated[TopicModellingService, Depends(get_topic_modelling_service)],
 ) -> dict:
-    job_id = service.submit_generation(body.doc_ids, body.core_topic)
+    job_id = service.submit_generation(body.doc_ids)
     return {"job_id": job_id}
 
 
