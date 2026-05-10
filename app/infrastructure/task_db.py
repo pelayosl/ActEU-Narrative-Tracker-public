@@ -4,6 +4,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.config import settings
 from app.repositories.document_repository import DocumentRepository
+from app.repositories.project_repository import ProjectRepository
+from app.repositories.topic_repository import TopicRepository
+from app.services.project_service import ProjectService
 from app.services.search_service import SearchService
 
 
@@ -15,5 +18,16 @@ async def search_service_context():
     try:
         db = client[settings.MONGODB_DB]
         yield SearchService(DocumentRepository(db))
+    finally:
+        client.close()
+
+
+@asynccontextmanager
+async def project_service_context():
+    """Async context manager for ProjectService, used by Celery tasks."""
+    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    try:
+        db = client[settings.MONGODB_DB]
+        yield ProjectService(ProjectRepository(db), TopicRepository(db))
     finally:
         client.close()

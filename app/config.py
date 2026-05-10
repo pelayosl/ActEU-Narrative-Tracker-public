@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 60
     DOCUMENT_SEARCH_LIMIT: int = 5000
+    CLASSIFIER_DIR: str = "/app/classifiers"
     OLLAMA_URL: str = "university-api" # Stored in .env
     OLLAMA_MODEL: str = "gemma3:27b"
 

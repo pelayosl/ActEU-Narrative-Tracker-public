@@ -18,6 +18,6 @@ class TopicRepository:
         cursor = self._collection.find()
         return [Topic(**doc) async for doc in cursor]
 
-    async def find_by_core_topic(self, core_topic: str) -> list[Topic]:
-        cursor = self._collection.find({"core_topic": core_topic})
+    async def find_by_origin_topic(self, origin_topic: str) -> list[Topic]:
+        cursor = self._collection.find({"origin_topic_ids": origin_topic})
         return [Topic(**doc) async for doc in cursor]

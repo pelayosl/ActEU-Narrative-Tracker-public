@@ -5,6 +5,12 @@ from pydantic import BaseModel
 from app.schemas.topic import Topic
 
 
+class TrainClassifierRequest(BaseModel):
+    topics: list[Topic]
+    project_id: str
+    generation_job_id: str
+
+
 class ClassifierMetadata(BaseModel):
     classifier_id: str
     topics: list[Topic]

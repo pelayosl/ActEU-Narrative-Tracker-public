@@ -7,7 +7,7 @@ class VisualisationQuery(BaseModel):
     topics: list[str]
     date_from: datetime
     date_to: datetime
-    countries: list[str]
+    languages: list[str]
     platforms: list[str]
 
 
@@ -20,7 +20,7 @@ class Actor(BaseModel):
 class DocumentPreview(BaseModel):
     doc_id: str
     platform: str
-    country: str
+    language: str
     date: datetime
     topic: str
     relevance_score: float
@@ -29,7 +29,7 @@ class DocumentPreview(BaseModel):
 
 class Dashboard(BaseModel):
     topic_evolution: list[dict]
-    topics_by_country: list[dict]
+    topics_by_language: list[dict]
     topics_by_platform: list[dict]
     top_actors: list[Actor]
     relevant_documents: list[DocumentPreview]
