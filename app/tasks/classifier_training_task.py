@@ -17,15 +17,15 @@ _TOPIC_MAPPING_KEY_PREFIX = "topic_map:"
 
 @celery_app.task
 def classifier_training_task(
-    topics: list[dict], project_id: str, generation_job_id: str
+    topics: list[dict], project_id: str, generation_job_id: str, name: str
 ) -> dict:
     """Train a FastText classifier on the validated topics.
     Depends on: ClassifierWrapper, SearchService (fetch texts), ProjectService (save classifier)."""
-    return asyncio.run(_run(topics, project_id, generation_job_id))
+    return asyncio.run(_run(topics, project_id, generation_job_id, name))
 
 
 async def _run(
-    topics: list[dict], project_id: str, generation_job_id: str
+    topics: list[dict], project_id: str, generation_job_id: str, name: str
 ) -> dict:
     validated_topics = [Topic(**t) for t in topics]
 
@@ -79,6 +79,7 @@ async def _run(
 
     metadata = ClassifierMetadata(
         classifier_id=classifier_id,
+        name=name,
         topics=validated_topics,
         file_path=file_path,
         created_at=datetime.now(timezone.utc),

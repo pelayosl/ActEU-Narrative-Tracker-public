@@ -17,7 +17,7 @@ async def train_classifier(
     service: Annotated[ClassificationService, Depends(get_classification_service)],
     _: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    job_id = service.submit_training(body.topics, body.project_id, body.generation_job_id)
+    job_id = service.submit_training(body.topics, body.project_id, body.generation_job_id, body.name)
     return {"job_id": job_id}
 
 

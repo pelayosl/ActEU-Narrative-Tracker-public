@@ -9,10 +9,12 @@ class TrainClassifierRequest(BaseModel):
     topics: list[Topic]
     project_id: str
     generation_job_id: str
+    name: str
 
 
 class ClassifierMetadata(BaseModel):
     classifier_id: str
+    name: str
     topics: list[Topic]
     file_path: str
     created_at: datetime
