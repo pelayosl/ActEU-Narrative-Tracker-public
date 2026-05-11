@@ -27,13 +27,20 @@ class JobQueueService:
             result = AsyncResult(job_id, app=self._celery)
             state = result.state
             task_result: dict = {}
+            progress: int = 0
+
             if state == "SUCCESS":
                 raw = result.result
-                # Tasks may return a list - wrap so JobStatus.result stays a dict
                 task_result = raw if isinstance(raw, dict) else {"data": raw}
+                progress = 100
             elif state == "FAILURE":
                 task_result = {"error": str(result.result)}
-            progress = 100 if state in _TERMINAL_STATES else 0
+                progress = 0
+            elif state == "PROGRESS":
+                info = result.info or {}
+                progress = info.get("progress", 0)
+                task_result = {"step": info.get("step", "")}
+
             return JobStatus(job_id=job_id, status=state, progress=progress, result=task_result)
 
         return await asyncio.to_thread(_fetch)
