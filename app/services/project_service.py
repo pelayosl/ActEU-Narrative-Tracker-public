@@ -5,7 +5,7 @@ from app.exceptions import ClassifierNotFound, ProjectAccessDenied, ProjectNotFo
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.topic_repository import TopicRepository
 from app.schemas.classification import ClassifierMetadata, DocumentProxy
-from app.schemas.project import Project
+from app.schemas.project import PendingPipeline, Project
 from app.schemas.topic import Topic
 
 
@@ -81,3 +81,17 @@ class ProjectService:
 
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
         await self._project_repo.upsert_document_proxies(project_id, proxies)
+
+    async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:
+        await self._project_repo.set_pending_pipeline(project_id, pipeline)
+
+    async def update_reconciled_topics(
+        self, project_id: str, reconciled_topics: list[Topic]
+    ) -> None:
+        await self._project_repo.update_reconciled_topics(project_id, reconciled_topics)
+
+    async def clear_pending_pipeline(self, project_id: str) -> None:
+        await self._project_repo.clear_pending_pipeline(project_id)
+
+    async def get_pending_pipeline(self, project_id: str) -> PendingPipeline | None:
+        return await self._project_repo.find_pending_pipeline(project_id)

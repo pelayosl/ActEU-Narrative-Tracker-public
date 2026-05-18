@@ -1,9 +1,6 @@
 import asyncio
-import json
 import uuid
 from datetime import datetime, timezone
-
-from redis import Redis
 
 from app.config import settings
 from app.infrastructure.classifier_wrapper import ClassifierWrapper
@@ -12,27 +9,29 @@ from app.schemas.classification import ClassifierMetadata
 from app.schemas.topic import Topic
 from app.tasks.celery_app import celery_app
 
-_TOPIC_MAPPING_KEY_PREFIX = "topic_map:"
-
 
 @celery_app.task
 def classifier_training_task(
-    topics: list[dict], project_id: str, generation_job_id: str, name: str
+    topics: list[dict], project_id: str, name: str
 ) -> dict:
     """Train a FastText classifier on the validated topics.
     Depends on: ClassifierWrapper, SearchService (fetch texts), ProjectService (save classifier)."""
-    return asyncio.run(_run(topics, project_id, generation_job_id, name))
+    return asyncio.run(_run(topics, project_id, name))
 
 
-async def _run(
-    topics: list[dict], project_id: str, generation_job_id: str, name: str
-) -> dict:
+async def _run(topics: list[dict], project_id: str, name: str) -> dict:
     validated_topics = [Topic(**t) for t in topics]
 
-    # Retrieve topic_id → doc_ids mapping stored by topic_generation_task
-    topic_mapping = _get_topic_mapping(generation_job_id)
+    # Retrieve topic_id → doc_ids mapping from the project's pending pipeline
+    async with project_service_context() as project_service:
+        pipeline = await project_service.get_pending_pipeline(project_id)
 
-    # Build training data: for each validated topic, union doc_ids from its origin topics
+    if pipeline is None:
+        raise ValueError("No pending pipeline found — topic generation must run first")
+
+    topic_mapping = pipeline.topic_mapping
+
+    # Build training data: for each validated topic, union doc_ids from its origin topics.
     # origin_topic_ids are the generation-era UUIDs which are the keys in topic_mapping.
     # If origin_topic_ids is empty (user skipped reconciliation), use the topic's own ID.
     training_pairs: list[tuple[str, str]] = []  # (doc_id, topic_id label for this classifier)
@@ -46,7 +45,7 @@ async def _run(
             training_pairs.append((doc_id, topic.topic_id))
 
     if not training_pairs:
-        raise ValueError("No training data found — topic mapping may have expired or doc_ids are empty")
+        raise ValueError("No training data found — topic mapping is empty or doc_ids are missing")
 
     all_doc_ids = list({doc_id for doc_id, _ in training_pairs})
 
@@ -87,17 +86,6 @@ async def _run(
 
     async with project_service_context() as project_service:
         await project_service.save_classifier(project_id, metadata)
+        await project_service.clear_pending_pipeline(project_id)
 
     return metadata.model_dump()
-
-
-def _get_topic_mapping(generation_job_id: str) -> dict[str, list[str]]:
-    key = f"{_TOPIC_MAPPING_KEY_PREFIX}{generation_job_id}"
-    redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    try:
-        raw = redis.get(key)
-        if raw is None:
-            return {}
-        return json.loads(raw)
-    finally:
-        redis.close()

@@ -4,22 +4,21 @@ import logging
 import re
 import uuid
 from collections import defaultdict
+from datetime import datetime, timezone
 
 import httpx
 from bertopic import BERTopic
 from bertopic.representation import BaseRepresentation
 from celery import Task
-from redis import Redis
 from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
 from app.config import settings
-from app.infrastructure.task_db import search_service_context
+from app.infrastructure.task_db import project_service_context, search_service_context
+from app.schemas.project import PendingPipeline
 from app.schemas.topic import GenerateTopicsResponse, Topic
 from app.tasks.celery_app import celery_app
-
-_TOPIC_MAPPING_KEY_PREFIX = "topic_map:"
 
 
 def _update(task: Task, progress: int, step: str) -> None:
@@ -79,13 +78,13 @@ class OllamaRepresentation(BaseRepresentation):
 
 
 @celery_app.task(bind=True)
-def topic_generation_task(self, doc_ids: list[str]) -> dict:
+def topic_generation_task(self, project_id: str, doc_ids: list[str]) -> dict:
     """Run BERTopic on the given documents and label each topic via the university LLM."""
     job_id = self.request.id
-    return asyncio.run(_run(self, doc_ids, job_id))
+    return asyncio.run(_run(self, project_id, doc_ids, job_id))
 
 
-async def _run(task: Task, doc_ids: list[str], job_id: str) -> dict:
+async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> dict:
     _update(task, 5, "Fetching documents")
     async with search_service_context() as service:
         docs = await service.get_documents_by_ids(doc_ids)
@@ -97,12 +96,8 @@ async def _run(task: Task, doc_ids: list[str], job_id: str) -> dict:
     ]
     text_doc_pairs = [(text, doc_id) for text, doc_id in text_doc_pairs if text]
 
-    if not text_doc_pairs:
-        _store_topic_mapping(job_id, {})
-        return GenerateTopicsResponse(topics=[]).model_dump()
-
     if len(text_doc_pairs) < 2:
-        _store_topic_mapping(job_id, {})
+        await _store_pending_pipeline(project_id, job_id, [], {})
         return GenerateTopicsResponse(topics=[]).model_dump()
 
     texts = [text for text, _ in text_doc_pairs]
@@ -136,14 +131,14 @@ async def _run(task: Task, doc_ids: list[str], job_id: str) -> dict:
         if bert_topic_id != -1:
             topic_doc_ids[bert_topic_id].append(filtered_doc_ids[idx])
 
-    result = []
+    generated_topics: list[Topic] = []
     topic_doc_ids_by_topic: dict[str, list[str]] = {}
     for bert_topic_id in topic_model.get_topics():
         if bert_topic_id == -1:
             continue
         name, description = representation._labels.get(bert_topic_id, ("Unknown", ""))
         topic_id = str(uuid.uuid4())
-        result.append(
+        generated_topics.append(
             Topic(
                 topic_id=topic_id,
                 name=name,
@@ -152,17 +147,25 @@ async def _run(task: Task, doc_ids: list[str], job_id: str) -> dict:
         )
         topic_doc_ids_by_topic[topic_id] = topic_doc_ids.get(bert_topic_id, [])
 
-    _store_topic_mapping(job_id, topic_doc_ids_by_topic)
-    return GenerateTopicsResponse(topics=result).model_dump()
+    await _store_pending_pipeline(project_id, job_id, generated_topics, topic_doc_ids_by_topic)
+    return GenerateTopicsResponse(topics=generated_topics).model_dump()
 
 
-def _store_topic_mapping(job_id: str, topic_doc_ids: dict[str, list[str]]) -> None:
-    key = f"{_TOPIC_MAPPING_KEY_PREFIX}{job_id}"
-    redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    try:
-        redis.setex(key, settings.TOPIC_MAPPING_TTL_SECONDS, json.dumps(topic_doc_ids))
-    finally:
-        redis.close()
+async def _store_pending_pipeline(
+    project_id: str,
+    job_id: str,
+    generated_topics: list[Topic],
+    topic_mapping: dict[str, list[str]],
+) -> None:
+    pipeline = PendingPipeline(
+        generation_job_id=job_id,
+        generated_topics=generated_topics,
+        reconciled_topics=[],
+        topic_mapping=topic_mapping,
+        created_at=datetime.now(timezone.utc),
+    )
+    async with project_service_context() as project_service:
+        await project_service.set_pending_pipeline(project_id, pipeline)
 
 
 def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str]:

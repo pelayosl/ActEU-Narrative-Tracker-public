@@ -13,7 +13,6 @@ class ClassificationService:
         self,
         topics: list[Topic],
         project_id: str,
-        generation_job_id: str,
         name: str,
     ) -> str:
         return self._job_queue.dispatch(
@@ -21,7 +20,6 @@ class ClassificationService:
             {
                 "topics": [t.model_dump() for t in topics],
                 "project_id": project_id,
-                "generation_job_id": generation_job_id,
                 "name": name,
             },
         )

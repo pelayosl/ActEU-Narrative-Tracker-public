@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.schemas.classification import ClassifierMetadata, DocumentProxy
-from app.schemas.project import Project
+from app.schemas.project import PendingPipeline, Project
+from app.schemas.topic import Topic
 from pymongo import UpdateOne
 
 
@@ -70,6 +71,34 @@ class ProjectRepository:
             if proxy["doc_id"] in doc_ids_set
             and any(label["topic_id"] in subtopics_set for label in proxy.get("labels", []))
         ]
+
+    async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {"$set": {"pending_pipeline": pipeline.model_dump()}},
+        )
+
+    async def update_reconciled_topics(
+        self, project_id: str, reconciled_topics: list[Topic]
+    ) -> None:
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {"$set": {"pending_pipeline.reconciled_topics": [t.model_dump() for t in reconciled_topics]}},
+        )
+
+    async def clear_pending_pipeline(self, project_id: str) -> None:
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {"$set": {"pending_pipeline": None}},
+        )
+
+    async def find_pending_pipeline(self, project_id: str) -> PendingPipeline | None:
+        doc = await self._collection.find_one(
+            {"project_id": project_id}, {"pending_pipeline": 1}
+        )
+        if doc and doc.get("pending_pipeline"):
+            return PendingPipeline.model_validate(doc["pending_pipeline"])
+        return None
 
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
         operations = []

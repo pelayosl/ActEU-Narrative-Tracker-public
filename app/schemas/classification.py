@@ -8,7 +8,6 @@ from app.schemas.topic import Topic
 class TrainClassifierRequest(BaseModel):
     topics: list[Topic]
     project_id: str
-    generation_job_id: str
     name: str
 
 

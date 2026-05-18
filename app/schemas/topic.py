@@ -11,7 +11,13 @@ class Topic(BaseModel):
 
 
 class GenerateTopicsRequest(BaseModel):
+    project_id: str
     doc_ids: list[str]
+
+
+class ReconciliationRequest(BaseModel):
+    project_id: str
+    topics: list[Topic]
 
 
 class GenerateTopicsResponse(BaseModel):
