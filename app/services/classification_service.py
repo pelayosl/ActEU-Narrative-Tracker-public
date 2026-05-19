@@ -24,5 +24,14 @@ class ClassificationService:
             },
         )
 
-    def submit_labelling(self, project_id: str, classifier_id: str, query: SearchQuery) -> str:
-        raise NotImplementedError
+    def submit_labelling(
+        self, project_id: str, classifier_id: str, query: SearchQuery
+    ) -> str:
+        return self._job_queue.dispatch(
+            "app.tasks.labelling_task.labelling_task",
+            {
+                "project_id": project_id,
+                "classifier_id": classifier_id,
+                "query": query.model_dump(mode="json"),
+            },
+        )

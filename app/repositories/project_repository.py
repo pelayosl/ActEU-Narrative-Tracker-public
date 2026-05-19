@@ -100,6 +100,20 @@ class ProjectRepository:
             return PendingPipeline.model_validate(doc["pending_pipeline"])
         return None
 
+    async def find_labelled_doc_ids(self, project_id: str, classifier_id: str) -> list[str]:
+        """Returns doc_ids in this project whose proxies already carry a label from the given classifier."""
+        doc = await self._collection.find_one(
+            {"project_id": project_id},
+            {"document_proxies": 1},
+        )
+        if not doc:
+            return []
+        return [
+            proxy["doc_id"]
+            for proxy in doc.get("document_proxies", [])
+            if any(label.get("classifier_id") == classifier_id for label in proxy.get("labels", []))
+        ]
+
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
         operations = []
         for proxy in proxies:

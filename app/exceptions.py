@@ -29,3 +29,11 @@ class ProjectAccessDenied(Exception):
 
 class ClassifierNotFound(Exception):
     pass
+
+
+class NoPendingPipeline(Exception):
+    pass
+
+
+class LabellingLocked(Exception):
+    pass

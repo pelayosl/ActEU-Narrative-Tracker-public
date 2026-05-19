@@ -22,7 +22,7 @@ class ClassifierWrapper:
             self._model = fasttext.train_supervised(
                 input=tmp_path,
                 epoch=25,
-                lr=0.5,
+                lr=0.1,
                 wordNgrams=2,
                 verbose=0,
             )

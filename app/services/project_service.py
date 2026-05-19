@@ -1,10 +1,20 @@
 import uuid
 from datetime import datetime, timezone
 
-from app.exceptions import ClassifierNotFound, ProjectAccessDenied, ProjectNotFound
+from app.exceptions import (
+    ClassifierNotFound,
+    NoPendingPipeline,
+    ProjectAccessDenied,
+    ProjectNotFound,
+)
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.topic_repository import TopicRepository
-from app.schemas.classification import ClassifierMetadata, DocumentProxy
+from app.schemas.classification import (
+    ClassifierMetadata,
+    DocumentProxy,
+    LabellingResult,
+    ProxyLabel,
+)
 from app.schemas.project import PendingPipeline, Project
 from app.schemas.topic import Topic
 
@@ -95,3 +105,66 @@ class ProjectService:
 
     async def get_pending_pipeline(self, project_id: str) -> PendingPipeline | None:
         return await self._project_repo.find_pending_pipeline(project_id)
+
+    async def get_labelled_doc_ids(self, project_id: str, classifier_id: str) -> set[str]:
+        """Returns the set of doc_ids already carrying a label from the given classifier."""
+        return set(await self._project_repo.find_labelled_doc_ids(project_id, classifier_id))
+
+    async def apply_pipeline_labels(
+        self, project_id: str, classifier_id: str
+    ) -> LabellingResult:
+        """Phase 1 labelling: writes proxies for the documents already in topic_mapping
+        using the classifier's topics. Clears the pending pipeline on success.
+        Raises NoPendingPipeline if no pipeline is present, ClassifierNotFound if the
+        classifier does not belong to the project."""
+        pipeline = await self._project_repo.find_pending_pipeline(project_id)
+        if pipeline is None:
+            raise NoPendingPipeline
+
+        classifier = await self._project_repo.find_classifier(project_id, classifier_id)
+        if classifier is None:
+            raise ClassifierNotFound
+
+        topic_mapping = pipeline.topic_mapping
+
+        # Build (doc_id → list[ProxyLabel]) by walking the classifier's topics and unioning
+        # doc_ids from their origin_topic_ids.
+        doc_to_labels: dict[str, list[ProxyLabel]] = {}
+        topic_summary: dict[str, int] = {}
+
+        for topic in classifier.topics:
+            source_ids = topic.origin_topic_ids if topic.origin_topic_ids else [topic.topic_id]
+            doc_ids_for_topic: set[str] = set()
+            for sid in source_ids:
+                doc_ids_for_topic.update(topic_mapping.get(sid, []))
+
+            if not doc_ids_for_topic:
+                continue
+
+            label = ProxyLabel(
+                topic_id=topic.topic_id,
+                name=topic.name,
+                description=topic.description,
+                classifier_id=classifier_id,
+                confidence=None,
+            )
+            for doc_id in doc_ids_for_topic:
+                doc_to_labels.setdefault(doc_id, []).append(label)
+
+            topic_summary[topic.topic_id] = len(doc_ids_for_topic)
+
+        proxies = [
+            DocumentProxy(doc_id=doc_id, labels=labels)
+            for doc_id, labels in doc_to_labels.items()
+        ]
+
+        if proxies:
+            await self._project_repo.upsert_document_proxies(project_id, proxies)
+
+        await self._project_repo.clear_pending_pipeline(project_id)
+
+        return LabellingResult(
+            project_id=project_id,
+            total_labelled=len(proxies),
+            topic_summary=topic_summary,
+        )

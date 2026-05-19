@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
 
 from motor.motor_asyncio import AsyncIOMotorClient
+from redis.asyncio import Redis
 
 from app.config import settings
+from app.infrastructure.mutex_manager import MutexManager
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.topic_repository import TopicRepository
@@ -31,3 +33,13 @@ async def project_service_context():
         yield ProjectService(ProjectRepository(db), TopicRepository(db))
     finally:
         client.close()
+
+
+@asynccontextmanager
+async def mutex_manager_context():
+    """Async context manager for MutexManager, used by Celery tasks."""
+    redis = Redis.from_url(settings.REDIS_URL)
+    try:
+        yield MutexManager(redis)
+    finally:
+        await redis.aclose()
