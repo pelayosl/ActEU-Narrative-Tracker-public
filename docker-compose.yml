@@ -37,9 +37,12 @@ services:
     env_file: .env
     environment:
       CELERY_AUTODISCOVER: "1"
+    volumes:
+      - classifier_data:/app/classifiers
     depends_on:
       - mongo
       - redis
 
 volumes:
   mongo_data:
+  classifier_data:
