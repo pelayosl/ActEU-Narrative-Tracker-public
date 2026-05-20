@@ -6,6 +6,8 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from app.config import settings
+
 import httpx
 from bertopic import BERTopic
 from bertopic.representation import BaseRepresentation
@@ -104,7 +106,7 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
     filtered_doc_ids = [doc_id for _, doc_id in text_doc_pairs]
 
     _update(task, 10, "Computing embeddings")
-    embedding_model = SentenceTransformer("google/embeddinggemma-300m", trust_remote_code=True)
+    embedding_model = SentenceTransformer("google/embeddinggemma-300m", token=settings.HF_TOKEN, trust_remote_code=True)
     embeddings = embedding_model.encode(texts, show_progress_bar=False)
 
     # Phase 2: Embedding cache hooks go here, future implementation

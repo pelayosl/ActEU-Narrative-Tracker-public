@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     CLASSIFIER_DIR: str = "/app/classifiers"
     OLLAMA_URL: str = "university-api" # Stored in .env
     OLLAMA_MODEL: str = "gemma3:27b"
+    HF_TOKEN: str = "changeme"
 
     class Config:
         env_file = ".env"
