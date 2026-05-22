@@ -1,20 +1,63 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-// TODO: wire to api.login + NextAuth. Show inline "Invalid credentials" on error.
 export function LoginForm() {
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const res = await signIn("credentials", { username, password, redirect: false });
+
+    setLoading(false);
+    if (res?.error) {
+      // Inline, generic — never reveal which field was wrong.
+      setError("Invalid credentials");
+      return;
+    }
+    router.push("/pipeline");
+    router.refresh();
+  }
+
   return (
-    <form className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <label className="mb-1 block text-sm font-medium text-ink">Username</label>
-        <input type="text" className="w-full rounded-md border border-border px-3 py-2 text-sm" />
+        <Label htmlFor="username">Username</Label>
+        <Input
+          id="username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
+          required
+        />
       </div>
       <div>
-        <label className="mb-1 block text-sm font-medium text-ink">Password</label>
-        <input type="password" className="w-full rounded-md border border-border px-3 py-2 text-sm" />
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          required
+        />
       </div>
-      <Button type="submit" className="w-full">Log in</Button>
+      {error && <p className="text-sm text-acteu-red">{error}</p>}
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? "Signing in…" : "Log in"}
+      </Button>
     </form>
   );
 }

@@ -11,13 +11,15 @@ import type {
   VisualisationQuery,
 } from "@/types/api";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Browser calls go through the Next.js proxy (see next.config.mjs rewrite) — no CORS.
+const BASE_URL = "/api/backend";
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.headers ?? {}),
     },
   });
@@ -32,8 +34,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
-  register: (form: { name: string; surname: string; username: string; password: string; role: "admin" | "user" }) =>
-    request<UserPublic>("/auth/register", { method: "POST", body: JSON.stringify(form) }),
+  register: (
+    form: { name: string; surname: string; username: string; password: string; role: "admin" | "user" },
+    token?: string, // admin bearer token — register is admin-only
+  ) => request<UserPublic>("/auth/register", { method: "POST", body: JSON.stringify(form) }, token),
 
   // Projects
   listProjects: () => request<Project[]>("/projects"),
