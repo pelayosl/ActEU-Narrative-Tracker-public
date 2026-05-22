@@ -1,6 +1,6 @@
 import asyncio
 
-from app.infrastructure.task_db import project_service_context
+from app.tasks.task_context import project_service_context
 from app.schemas.topic import ReconciliationResponse, Topic
 from app.services.llm_client import LLMClient
 from app.tasks.celery_app import celery_app

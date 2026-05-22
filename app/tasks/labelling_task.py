@@ -2,7 +2,7 @@ import asyncio
 
 from app.exceptions import LabellingLocked
 from app.infrastructure.classifier_wrapper import ClassifierWrapper
-from app.infrastructure.task_db import (
+from app.tasks.task_context import (
     mutex_manager_context,
     project_service_context,
     search_service_context,

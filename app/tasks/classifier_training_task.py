@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.infrastructure.classifier_wrapper import ClassifierWrapper
-from app.infrastructure.task_db import project_service_context, search_service_context
+from app.tasks.task_context import project_service_context, search_service_context
 from app.schemas.classification import ClassifierMetadata
 from app.schemas.topic import Topic
 from app.tasks.celery_app import celery_app

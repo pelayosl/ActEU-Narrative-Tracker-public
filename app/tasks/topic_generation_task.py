@@ -17,7 +17,7 @@ from sentence_transformers import SentenceTransformer
 logger = logging.getLogger(__name__)
 
 from app.config import settings
-from app.infrastructure.task_db import project_service_context, search_service_context
+from app.tasks.task_context import project_service_context, search_service_context
 from app.schemas.project import PendingPipeline
 from app.schemas.topic import GenerateTopicsResponse, Topic
 from app.tasks.celery_app import celery_app
