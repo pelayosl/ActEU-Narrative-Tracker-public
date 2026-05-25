@@ -1,7 +1,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 
 from app.api.dependencies import (
     get_classification_service,
@@ -15,8 +14,12 @@ from app.exceptions import (
     ProjectNotFound,
 )
 from app.schemas.auth import User
-from app.schemas.classification import LabellingResult, TrainClassifierRequest
-from app.schemas.search import SearchQuery
+from app.schemas.classification import (
+    InitialLabelRequest,
+    LabelRequest,
+    LabellingResult,
+    TrainClassifierRequest,
+)
 from app.services.classification_service import ClassificationService
 from app.services.project_service import ProjectService
 
@@ -26,17 +29,6 @@ P_NOT_FOUND = "Project not found"
 ACCESS_DENIED = "Access denied"
 CLASSIFIER_NOT_FOUND = "Classifier not found"
 NO_PENDING_PIPELINE = "No pending pipeline — initial labelling unavailable"
-
-
-class LabelRequest(BaseModel):
-    project_id: str
-    classifier_id: str
-    query: SearchQuery
-
-
-class InitialLabelRequest(BaseModel):
-    project_id: str
-    classifier_id: str
 
 
 @router.post("/train")

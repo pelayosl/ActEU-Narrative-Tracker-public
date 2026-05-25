@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.search import SearchQuery
 from app.schemas.topic import Topic
 
 
@@ -36,3 +37,14 @@ class LabellingResult(BaseModel):
     project_id: str
     total_labelled: int
     topic_summary: dict[str, int]
+
+
+class LabelRequest(BaseModel):
+    project_id: str
+    classifier_id: str
+    query: SearchQuery
+
+
+class InitialLabelRequest(BaseModel):
+    project_id: str
+    classifier_id: str
