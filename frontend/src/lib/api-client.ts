@@ -11,8 +11,15 @@ import type {
   VisualisationQuery,
 } from "@/types/api";
 
-// Browser calls go through the Next.js proxy (see next.config.mjs rewrite) — no CORS.
+// Browser calls go through the Next.js proxy (src/app/api/backend/[...path]/route.ts) — no CORS.
 const BASE_URL = "/api/backend";
+
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -23,7 +30,9 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
       ...(init.headers ?? {}),
     },
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    throw new ApiError(res.status, `API error ${res.status}: ${await res.text()}`);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -39,12 +48,15 @@ export const api = {
     token?: string, // admin bearer token — register is admin-only
   ) => request<UserPublic>("/auth/register", { method: "POST", body: JSON.stringify(form) }, token),
 
-  // Projects
-  listProjects: () => request<Project[]>("/projects"),
-  createProject: (name: string) =>
-    request<Project>("/projects", { method: "POST", body: JSON.stringify({ name }) }),
-  getProject: (id: string) => request<Project>(`/projects/${id}`),
-  deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: "DELETE" }),
+  // Projects (all require the user's bearer token)
+  listProjects: (token?: string) => request<Project[]>("/projects", {}, token),
+  createProject: (
+    name: string,
+    token?: string, // backend takes `name` as a query parameter, not a body
+  ) => request<Project>(`/projects?name=${encodeURIComponent(name)}`, { method: "POST" }, token),
+  getProject: (id: string, token?: string) => request<Project>(`/projects/${id}`, {}, token),
+  deleteProject: (id: string, token?: string) =>
+    request<void>(`/projects/${id}`, { method: "DELETE" }, token),
 
   // Search
   search: (query: SearchQuery) =>

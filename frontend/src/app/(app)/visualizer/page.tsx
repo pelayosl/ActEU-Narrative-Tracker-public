@@ -14,7 +14,7 @@ export default function VisualizerPage() {
   const [loaded, setLoaded] = useState(false);
 
   if (!activeProject) {
-    return <ProjectSelectorDialog open />;
+    return <ProjectSelectorDialog />;
   }
 
   return (

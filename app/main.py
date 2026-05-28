@@ -10,7 +10,7 @@ from app.api import (
     visualisation,
 )
 
-app = FastAPI(title="ActEU Narrative Tracker")
+app = FastAPI(title="ActEU Narrative Tracker", redirect_slashes=False)
 
 app.include_router(search.router)
 app.include_router(projects.router)

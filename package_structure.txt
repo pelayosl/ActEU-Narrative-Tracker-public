@@ -4,14 +4,16 @@ Root
 - docker-compose.yml
 - Dockerfile
 - main.py                     - Minimal FastAPI hello-world entry point
-- project_context.md          - Architecture and project context
 - pytest.ini
 - requirements.txt
 - requirements-dev.txt
+- requirements-nlp.txt
 - test_main.http
 - app/                        - FastAPI backend (API gateway)
+- frontend/                   - Next.js frontend
 - scripts/                    - Data ingestion and processing
 - tests/                      - Pytest test suite
+- z_context/                  - Project context and documentation
 
 app/
 - __init__.py
@@ -58,6 +60,7 @@ app/
   - visualisation_service.py
 - tasks/                      - Celery tasks and async job wrappers
   - celery_app.py
+  - task_context.py
   - classifier_training_task.py
   - labelling_task.py
   - reconciliation_task.py
@@ -81,6 +84,32 @@ tests/
   - test_topic_repository.py
   - test_user_repository.py
 - services/
+  - test_auth_service.py
+
+frontend/
+- package.json
+- src/
+  - app/
+    - (app)/                  - Authenticated app routes
+      - pipeline/
+      - projects/
+      - visualizer/
+    - login/
+    - page.tsx
+  - components/               - React components
+    - auth/
+    - layout/
+    - pipeline/
+    - projects/
+    - ui/
+    - visualizer/
+  - lib/                      - Shared utilities
+  - stores/                   - Zustand state stores
+  - types/                    - TypeScript type definitions
+
+z_context/
+- project_context.md          - Architecture and project context
+- Database.md                 - MongoDB collection definitions
 
 Main characteristics
 - Domain: ActEU research project; narrative discovery and analysis over multilingual datasets.
@@ -90,4 +119,4 @@ Main characteristics
 - Async jobs: Celery workers with Redis broker; SSE streams for progress.
 - NLP: BERTopic, FastText classifier, sentence-transformers embeddings, Gemini API.
 - Infrastructure: Docker + Docker Compose; Nginx reverse proxy for deployment.
-- Frontend (external): Next.js + Tailwind + Zustand + React Query (per project_context).
+- Frontend: Next.js + Tailwind + Zustand + React Query; source under frontend/.

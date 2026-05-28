@@ -14,7 +14,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 P_NOT_FOUND="Project not found"
 ACCESS_DENIED="Access denied"
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_project(
     name: str,
     service: Annotated[ProjectService, Depends(get_project_service)],
@@ -23,7 +23,7 @@ async def create_project(
     return await service.create_project(current_user.user_id, name)
 
 
-@router.get("/")
+@router.get("")
 async def list_projects(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],

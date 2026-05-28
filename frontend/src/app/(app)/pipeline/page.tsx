@@ -14,7 +14,7 @@ export default function PipelinePage() {
   const currentStep = usePipelineStore((s) => s.currentStep);
 
   if (!activeProject) {
-    return <ProjectSelectorDialog open />;
+    return <ProjectSelectorDialog />;
   }
 
   return (

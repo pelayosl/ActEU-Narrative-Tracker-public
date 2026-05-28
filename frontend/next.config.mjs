@@ -2,14 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  async rewrites() {
-    return [
-      {
-        source: "/api/backend/:path*",
-        destination: `${process.env.BACKEND_URL ?? "http://localhost:8000"}/:path*`,
-      },
-    ];
-  },
+  // Backend proxy is handled by src/app/api/backend/[...path]/route.ts.
+  // A rewrite is not used here because :path* drops trailing slashes,
+  // which breaks FastAPI routes defined with `/`.
 };
 
 export default nextConfig;

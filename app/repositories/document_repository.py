@@ -36,7 +36,7 @@ class DocumentRepository:
         if query.topics:
             filters.append({"acteu_topic.label": {"$in": query.topics}})
 
-        # if query.subtopics: This will be useful if the project export functionality is implemented, but not yet.
+        # if query.subtopics:
         #     filters.append({
         #         "$or": [
         #             {"subtopics.topic_id": {"$in": query.subtopics}},
