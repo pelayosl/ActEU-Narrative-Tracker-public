@@ -163,6 +163,57 @@ class TestFind:
 
 
 # ---------------------------------------------------------------------------
+# Confidence threshold filtering
+# ---------------------------------------------------------------------------
+
+class TestConfidenceThreshold:
+    async def test_threshold_without_topics_is_ignored(self, repo, populated):
+        """The threshold only constrains the topic filter; without `topics`, it is a no-op."""
+        results = await repo.find(SearchQuery(confidence_threshold=0.95))
+        assert len(results) == 3
+
+    async def test_threshold_filters_low_confidence_topic_match(self, repo, populated):
+        """Doc with confidence 0.75 is dropped when threshold is 0.8."""
+        results = await repo.find(SearchQuery(
+            topics=["immigration", "climate_change", "gender_issues"],
+            confidence_threshold=0.8,
+        ))
+        labels = {doc["acteu_topic"]["label"] for doc in results}
+        assert "gender_issues" not in labels
+        assert labels == {"immigration", "climate_change"}
+
+    async def test_threshold_inclusive_lower_bound(self, repo, populated):
+        """A doc with confidence exactly equal to the threshold is kept."""
+        results = await repo.find(SearchQuery(
+            topics=["gender_issues"],
+            confidence_threshold=0.75,
+        ))
+        assert len(results) == 1
+        assert results[0]["acteu_topic"]["label"] == "gender_issues"
+
+    async def test_threshold_drops_all_below(self, repo, populated):
+        results = await repo.find(SearchQuery(
+            topics=["immigration", "climate_change", "gender_issues"],
+            confidence_threshold=0.95,
+        ))
+        assert results == []
+
+    async def test_threshold_zero_keeps_all_topic_matches(self, repo, populated):
+        results = await repo.find(SearchQuery(
+            topics=["immigration", "climate_change", "gender_issues"],
+            confidence_threshold=0.0,
+        ))
+        assert len(results) == 3
+
+    async def test_count_respects_threshold(self, repo, populated):
+        total = await repo.count(SearchQuery(
+            topics=["immigration", "climate_change", "gender_issues"],
+            confidence_threshold=0.8,
+        ))
+        assert total == 2
+
+
+# ---------------------------------------------------------------------------
 # find_by_ids()
 # ---------------------------------------------------------------------------
 
