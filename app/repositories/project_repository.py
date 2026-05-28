@@ -55,7 +55,11 @@ class ProjectRepository:
         return []
 
     async def find_proxy_doc_ids_by_subtopics(
-        self, project_id: str, doc_ids: list[str], subtopics: list[str]
+        self,
+        project_id: str,
+        doc_ids: list[str],
+        subtopics: list[str],
+        confidence_threshold: float | None = None,
     ) -> list[str]:
         doc = await self._collection.find_one(
             {"project_id": project_id},
@@ -65,11 +69,20 @@ class ProjectRepository:
             return []
         doc_ids_set = set(doc_ids)
         subtopics_set = set(subtopics)
+
+        def label_matches(label: dict) -> bool:
+            if label["topic_id"] not in subtopics_set:
+                return False
+            if confidence_threshold is None:
+                return True
+            confidence = label.get("confidence")
+            return confidence is not None and confidence >= confidence_threshold
+
         return [
             proxy["doc_id"]
             for proxy in doc.get("document_proxies", [])
             if proxy["doc_id"] in doc_ids_set
-            and any(label["topic_id"] in subtopics_set for label in proxy.get("labels", []))
+            and any(label_matches(label) for label in proxy.get("labels", []))
         ]
 
     async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:

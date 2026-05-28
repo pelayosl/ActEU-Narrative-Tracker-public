@@ -34,7 +34,10 @@ class DocumentRepository:
             filters.append({"platform": {"$in": query.platforms}})
 
         if query.topics:
-            filters.append({"acteu_topic.label": {"$in": query.topics}})
+            topic_filter: dict = {"acteu_topic.label": {"$in": query.topics}}
+            if query.confidence_threshold is not None:
+                topic_filter["acteu_topic.confidence"] = {"$gte": query.confidence_threshold}
+            filters.append(topic_filter)
 
         # if query.subtopics:
         #     filters.append({

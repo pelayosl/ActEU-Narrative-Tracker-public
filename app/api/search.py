@@ -32,7 +32,9 @@ async def search(
 
         doc_ids = [doc.doc_id for doc in result.retrieved_docs]
         filtered_ids = set(
-            await project_service.filter_proxies_by_subtopics(project_id, doc_ids, query.subtopics)
+            await project_service.filter_proxies_by_subtopics(
+                project_id, doc_ids, query.subtopics, query.confidence_threshold
+            )
         )
         result = SearchResult(
             total_docs=len(filtered_ids),

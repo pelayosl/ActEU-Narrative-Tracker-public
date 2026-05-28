@@ -84,10 +84,18 @@ class ProjectService:
             raise ProjectAccessDenied
 
     async def filter_proxies_by_subtopics(
-        self, project_id: str, doc_ids: list[str], subtopics: list[str]
+        self,
+        project_id: str,
+        doc_ids: list[str],
+        subtopics: list[str],
+        confidence_threshold: float | None = None,
     ) -> list[str]:
-        """Returns the subset of doc_ids whose project proxies carry at least one of the requested subtopic labels."""
-        return await self._project_repo.find_proxy_doc_ids_by_subtopics(project_id, doc_ids, subtopics)
+        """Returns the subset of doc_ids whose project proxies carry at least one of the
+        requested subtopic labels. When `confidence_threshold` is set, labels whose
+        confidence is below the threshold (or `None`) are not considered a match."""
+        return await self._project_repo.find_proxy_doc_ids_by_subtopics(
+            project_id, doc_ids, subtopics, confidence_threshold
+        )
 
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
         await self._project_repo.upsert_document_proxies(project_id, proxies)

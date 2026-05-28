@@ -11,6 +11,7 @@ class SearchQuery(BaseModel):
     platforms: list[str] = []
     topics: list[str] = []
     subtopics: list[str] = []
+    confidence_threshold: float | None = None
 
 
 class DocumentSummary(BaseModel):
