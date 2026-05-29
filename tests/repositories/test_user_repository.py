@@ -14,7 +14,7 @@ def make_user(**overrides) -> User:
 		"name": "Ana",
 		"surname": "Lopez",
 		"username": "alopez",
-		"hashed_pswd": "hashed-secret",
+		"hashed_password": "hashed-secret",
 		"role": "user",
 	}
 	base.update(overrides)
@@ -42,10 +42,10 @@ class TestFindByUsername:
 		result = await repo.find_by_username("missing")
 		assert result is None
 
-	async def test_maps_hashed_password_field(self, db, repo):
+	async def test_finds_user_with_hashed_password_field(self, db, repo):
 		'''
-		Inserts a user with a hashed_password field and verifies that the repository 
-		correctly maps it to the hashed_pswd attribute in the returned User object.
+		Inserts a user document and verifies that the repository correctly
+		returns a User object with the hashed_password field populated.
 		'''
 		payload = {
 			"user_id": "user-1",
@@ -64,7 +64,7 @@ class TestFindByUsername:
 		assert result.name == "Luis"
 		assert result.surname == "Garcia"
 		assert result.username == "lgarcia"
-		assert result.hashed_pswd == "hashed-1"
+		assert result.hashed_password == "hashed-1"
 		assert result.role == "admin"
 
 
@@ -75,8 +75,7 @@ class TestFindByUsername:
 class TestSave:
 	async def test_inserts_document_with_hashed_password(self, db, repo):
 		'''
-		Saves a new user and checks that all fields are correctly stored 
-		in the database, with hashed_pswd mapped to hashed_password.
+		Saves a new user and checks that all fields are correctly stored in the database.
 		'''
 		user = make_user()
 
@@ -88,8 +87,7 @@ class TestSave:
 		assert doc["name"] == user.name
 		assert doc["surname"] == user.surname
 		assert doc["username"] == user.username
-		assert doc["hashed_password"] == user.hashed_pswd
-		assert "hashed_pswd" not in doc
+		assert doc["hashed_password"] == user.hashed_password
 		assert doc["role"] == user.role
 
 	async def test_updates_existing_document_by_user_id(self, db, repo):
@@ -105,7 +103,7 @@ class TestSave:
 			name="Maria",
 			surname="Santos",
 			username="msantos",
-			hashed_pswd="hashed-updated",
+			hashed_password="hashed-updated",
 			role="admin",
 		)
 		await repo.save(updated)

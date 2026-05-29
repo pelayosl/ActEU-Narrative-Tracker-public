@@ -18,7 +18,7 @@ def make_user(**overrides) -> User:
         name="Ada",
         surname="Lovelace",
         username="ada",
-        hashed_pswd=PasswordHasher().hash("secret"),
+        hashed_password=PasswordHasher().hash("secret"),
         role="user",
     )
     base.update(overrides)
@@ -158,8 +158,8 @@ class TestRegisterUser:
     async def test_password_is_hashed(self, service, user_repo, hasher):
         user_repo.find_by_username.return_value = None
         user = await service.register_user(make_form())
-        assert user.hashed_pswd != "secret"
-        assert hasher.verify("secret", user.hashed_pswd)
+        assert user.hashed_password != "secret"
+        assert hasher.verify("secret", user.hashed_password)
 
     async def test_duplicate_username_raises(self, service, user_repo):
         user_repo.find_by_username.return_value = make_user()

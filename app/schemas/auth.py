@@ -6,7 +6,7 @@ class User(BaseModel):
     name: str
     surname: str
     username: str
-    hashed_pswd: str
+    hashed_password: str
     role: str
 
 

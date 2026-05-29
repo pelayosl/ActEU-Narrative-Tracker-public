@@ -20,7 +20,7 @@ class AuthService:
 
     async def login(self, username: str, password: str) -> AuthToken:
         user = await self._user_repo.find_by_username(username)
-        if not user or not self._hasher.verify(password, user.hashed_pswd):
+        if not user or not self._hasher.verify(password, user.hashed_password):
             raise InvalidCredentials()
         token = self._jwt.encode({"sub": user.user_id, "username": user.username, "role": user.role})
         return AuthToken(access_token=token)
@@ -40,7 +40,7 @@ class AuthService:
             name=form.name,
             surname=form.surname,
             username=form.username,
-            hashed_pswd=self._hasher.hash(form.password),
+            hashed_password=self._hasher.hash(form.password),
             role=form.role,
         )
         await self._user_repo.save(user)
