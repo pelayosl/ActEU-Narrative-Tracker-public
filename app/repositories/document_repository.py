@@ -174,6 +174,30 @@ class DocumentRepository:
             {"language": doc["_id"], "count": doc["count"]} async for doc in cursor
         ]
 
+    async def topic_presence_by_platform(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+    ) -> list[dict]:
+        """Document counts per platform for a topic. Returns
+        [{"platform": str, "count": int}] sorted by count descending."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+        )
+        pipeline = [
+            {"$match": match},
+            {"$group": {"_id": "$platform", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1, "_id": 1}},
+        ]
+        cursor = self._collection.aggregate(pipeline)
+        return [
+            {"platform": doc["_id"], "count": doc["count"]} async for doc in cursor
+        ]
+
     async def get_excerpt(self, doc_id: str) -> str:
         try:
             object_id = ObjectId(doc_id)

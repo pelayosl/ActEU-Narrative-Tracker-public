@@ -2,8 +2,10 @@ from app.repositories.document_repository import DocumentRepository
 from app.schemas.visualisation import (
     Dashboard,
     LanguageCount,
+    PlatformCount,
     TimePoint,
     TopicLanguageBreakdown,
+    TopicPlatformBreakdown,
     TopicTimeSeries,
     VisualisationQuery,
 )
@@ -26,11 +28,12 @@ class VisualisationService:
 
         topic_evolution = await self._topic_evolution(query, proxy_doc_ids)
         topics_by_language = await self._topics_by_language(query, proxy_doc_ids)
+        topics_by_platform = await self._topics_by_platform(query, proxy_doc_ids)
 
         return Dashboard(
             topic_evolution=topic_evolution,
             topics_by_language=topics_by_language,
-            topics_by_platform=[],
+            topics_by_platform=topics_by_platform,
             top_actors=[],
             relevant_documents=[],
         )
@@ -83,6 +86,30 @@ class VisualisationService:
                     topic=topic,
                     counts=[
                         LanguageCount(language=c["language"], count=c["count"])
+                        for c in counts
+                    ],
+                )
+            )
+        return breakdowns
+
+    async def _topics_by_platform(
+        self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
+    ) -> list[TopicPlatformBreakdown]:
+        breakdowns: list[TopicPlatformBreakdown] = []
+        for topic in query.topics:
+            counts = await self._document_repo.topic_presence_by_platform(
+                topic,
+                query.date_from,
+                query.date_to,
+                query.languages,
+                query.platforms,
+                proxy_doc_ids.get(topic),
+            )
+            breakdowns.append(
+                TopicPlatformBreakdown(
+                    topic=topic,
+                    counts=[
+                        PlatformCount(platform=c["platform"], count=c["count"])
                         for c in counts
                     ],
                 )

@@ -16,6 +16,7 @@ def document_repo() -> AsyncMock:
     repo = AsyncMock()
     repo.topic_presence_over_time.return_value = []
     repo.topic_presence_by_language.return_value = []
+    repo.topic_presence_by_platform.return_value = []
     return repo
 
 
@@ -54,7 +55,6 @@ class TestLoadDashboard:
 
     async def test_unimplemented_blocks_are_empty(self, service):
         result = await service.load_dashboard(make_query())
-        assert result.topics_by_platform == []
         assert result.top_actors == []
         assert result.relevant_documents == []
 
@@ -141,3 +141,34 @@ class TestTopicsByLanguage:
         assert args[2] == query.date_to
         assert args[3] == ["es"]
         assert args[4] == ["twitter"]
+
+
+# ---------------------------------------------------------------------------
+# topics_by_platform
+# ---------------------------------------------------------------------------
+
+class TestTopicsByPlatform:
+    async def test_maps_counts_per_topic(self, service, document_repo):
+        document_repo.topic_presence_by_platform.return_value = [
+            {"platform": "twitter", "count": 800},
+            {"platform": "telegram", "count": 50},
+        ]
+        result = await service.load_dashboard(make_query(topics=["immigration"]))
+
+        assert len(result.topics_by_platform) == 1
+        breakdown = result.topics_by_platform[0]
+        assert breakdown.topic == "immigration"
+        assert breakdown.counts[0].platform == "twitter"
+        assert breakdown.counts[0].count == 800
+        assert breakdown.counts[1].platform == "telegram"
+
+    async def test_one_breakdown_per_topic(self, service, document_repo):
+        result = await service.load_dashboard(make_query(topics=["a", "b"]))
+        assert [b.topic for b in result.topics_by_platform] == ["a", "b"]
+        assert document_repo.topic_presence_by_platform.await_count == 2
+
+    async def test_proxy_doc_ids_forwarded(self, service, document_repo, project_service):
+        project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
+        await service.load_dashboard(make_query(), project_id="p1")
+        args = document_repo.topic_presence_by_platform.call_args.args
+        assert args[5] == ["a", "b"]

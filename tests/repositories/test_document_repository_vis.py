@@ -165,3 +165,90 @@ class TestTopicPresenceByLanguage:
         await db["documents"].insert_one(make_doc())
         result = await repo.topic_presence_by_language("nonexistent", D_FROM, D_TO, [], [])
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# topic_presence_by_platform()
+# ---------------------------------------------------------------------------
+
+class TestTopicPresenceByPlatform:
+    async def test_groups_by_platform(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(platform="twitter"),
+            make_doc(platform="twitter"),
+            make_doc(platform="telegram"),
+        ])
+        result = await repo.topic_presence_by_platform("immigration", D_FROM, D_TO, [], [])
+        assert result == [
+            {"platform": "twitter", "count": 2},
+            {"platform": "telegram", "count": 1},
+        ]
+
+    async def test_only_counts_matching_topic(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(platform="twitter", acteu_topic={"label": "immigration", "confidence": 0.9}),
+            make_doc(platform="telegram", acteu_topic={"label": "climate_change", "confidence": 0.9}),
+        ])
+        result = await repo.topic_presence_by_platform("immigration", D_FROM, D_TO, [], [])
+        assert result == [{"platform": "twitter", "count": 1}]
+
+    async def test_matches_db_subtopic(self, db, repo):
+        await db["documents"].insert_one(make_doc(
+            platform="media",
+            acteu_topic={"label": "climate_change", "confidence": 0.9},
+            subtopics=[{"topic_id": "t1", "label": "wind_energy", "confidence": 0.7}],
+        ))
+        result = await repo.topic_presence_by_platform("wind_energy", D_FROM, D_TO, [], [])
+        assert result == [{"platform": "media", "count": 1}]
+
+    async def test_matches_proxy_doc_ids(self, db, repo):
+        res = await db["documents"].insert_one(make_doc(
+            platform="telegram", acteu_topic={"label": "other", "confidence": 0.9},
+        ))
+        proxy_id = str(res.inserted_id)
+        result = await repo.topic_presence_by_platform(
+            "project_sub", D_FROM, D_TO, [], [], proxy_doc_ids=[proxy_id]
+        )
+        assert result == [{"platform": "telegram", "count": 1}]
+
+    async def test_dedups_across_sources(self, db, repo):
+        res = await db["documents"].insert_one(make_doc(
+            platform="twitter", acteu_topic={"label": "immigration", "confidence": 0.9},
+        ))
+        proxy_id = str(res.inserted_id)
+        result = await repo.topic_presence_by_platform(
+            "immigration", D_FROM, D_TO, [], [], proxy_doc_ids=[proxy_id]
+        )
+        assert result == [{"platform": "twitter", "count": 1}]
+
+    async def test_sorted_by_count_descending(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(platform="media"),
+            make_doc(platform="twitter"),
+            make_doc(platform="twitter"),
+            make_doc(platform="twitter"),
+        ])
+        result = await repo.topic_presence_by_platform("immigration", D_FROM, D_TO, [], [])
+        assert result[0] == {"platform": "twitter", "count": 3}
+        assert result[1] == {"platform": "media", "count": 1}
+
+    async def test_language_filter(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(platform="twitter", language="es"),
+            make_doc(platform="telegram", language="fi"),
+        ])
+        result = await repo.topic_presence_by_platform("immigration", D_FROM, D_TO, ["fi"], [])
+        assert result == [{"platform": "telegram", "count": 1}]
+
+    async def test_date_range_excludes_outside(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(platform="twitter", published_time=datetime(2023, 1, 1, tzinfo=timezone.utc)),
+            make_doc(platform="telegram", published_time=datetime(2024, 5, 7, tzinfo=timezone.utc)),
+        ])
+        result = await repo.topic_presence_by_platform("immigration", D_FROM, D_TO, [], [])
+        assert result == [{"platform": "telegram", "count": 1}]
+
+    async def test_no_match_returns_empty(self, db, repo):
+        await db["documents"].insert_one(make_doc())
+        result = await repo.topic_presence_by_platform("nonexistent", D_FROM, D_TO, [], [])
+        assert result == []

@@ -37,6 +37,16 @@ class TopicLanguageBreakdown(BaseModel):
     counts: list[LanguageCount]
 
 
+class PlatformCount(BaseModel):
+    platform: str
+    count: int
+
+
+class TopicPlatformBreakdown(BaseModel):
+    topic: str
+    counts: list[PlatformCount]
+
+
 class DocumentPreview(BaseModel):
     doc_id: str
     platform: str
@@ -50,6 +60,6 @@ class DocumentPreview(BaseModel):
 class Dashboard(BaseModel):
     topic_evolution: list[TopicTimeSeries]
     topics_by_language: list[TopicLanguageBreakdown]
-    topics_by_platform: list[dict]
+    topics_by_platform: list[TopicPlatformBreakdown]
     top_actors: list[Actor]
     relevant_documents: list[DocumentPreview]
