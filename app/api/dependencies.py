@@ -70,8 +70,9 @@ def get_project_service(
 
 def get_visualisation_service(
     document_repo: Annotated[DocumentRepository, Depends(get_document_repo)],
+    project_service: Annotated[ProjectService, Depends(get_project_service)],
 ) -> VisualisationService:
-    return VisualisationService(document_repo)
+    return VisualisationService(document_repo, project_service)
 
 
 def get_redis() -> Redis:
