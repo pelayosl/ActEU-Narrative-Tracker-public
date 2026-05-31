@@ -93,9 +93,21 @@ class ProjectService:
         """Returns the subset of doc_ids whose project proxies carry at least one of the
         requested subtopic labels. When `confidence_threshold` is set, labels whose
         confidence is below the threshold (or `None`) are not considered a match."""
-        return await self._project_repo.find_proxy_doc_ids_by_subtopics(
+        return await self._project_repo.filter_proxy_doc_ids_by_subtopics(
             project_id, doc_ids, subtopics, confidence_threshold
         )
+
+    async def get_proxy_doc_ids_by_topics(
+        self,
+        project_id: str,
+        topics: list[str]
+    ) -> dict[str, list[str]]:
+        """Maps each requested topic to the doc_ids whose project proxies carry a label for it.
+        Used by the visualiser to resolve project-scoped subtopics. Topics with no proxy
+        matches are omitted."""
+        if not topics:
+            return {}
+        return await self._project_repo.find_proxy_doc_ids_by_topics(project_id, topics)
 
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
         await self._project_repo.upsert_document_proxies(project_id, proxies)

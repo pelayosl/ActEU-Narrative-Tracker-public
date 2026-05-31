@@ -17,6 +17,26 @@ class Actor(BaseModel):
     document_count: int
 
 
+class TimePoint(BaseModel):
+    date: str  # day bucket, formatted "YYYY-MM-DD"
+    count: int
+
+
+class TopicTimeSeries(BaseModel):
+    topic: str
+    series: list[TimePoint]
+
+
+class LanguageCount(BaseModel):
+    language: str
+    count: int
+
+
+class TopicLanguageBreakdown(BaseModel):
+    topic: str
+    counts: list[LanguageCount]
+
+
 class DocumentPreview(BaseModel):
     doc_id: str
     platform: str
@@ -28,8 +48,8 @@ class DocumentPreview(BaseModel):
 
 
 class Dashboard(BaseModel):
-    topic_evolution: list[dict]
-    topics_by_language: list[dict]
+    topic_evolution: list[TopicTimeSeries]
+    topics_by_language: list[TopicLanguageBreakdown]
     topics_by_platform: list[dict]
     top_actors: list[Actor]
     relevant_documents: list[DocumentPreview]

@@ -54,7 +54,7 @@ class ProjectRepository:
             return [ClassifierMetadata.model_validate(c) for c in doc["classifiers"]]
         return []
 
-    async def find_proxy_doc_ids_by_subtopics(
+    async def filter_proxy_doc_ids_by_subtopics(
         self,
         project_id: str,
         doc_ids: list[str],
@@ -84,6 +84,29 @@ class ProjectRepository:
             if proxy["doc_id"] in doc_ids_set
             and any(label_matches(label) for label in proxy.get("labels", []))
         ]
+
+    async def find_proxy_doc_ids_by_topics(
+        self,
+        project_id: str,
+        topics: list[str],
+    ) -> dict[str, list[str]]:
+        """Maps each requested topic to the list of doc_ids whose project proxies carry a
+        label for it. A label matches when its `topic_id` or `name` equals the topic.
+        Topics with no proxy matches are omitted from the result."""
+        doc = await self._collection.find_one(
+            {"project_id": project_id},
+            {"document_proxies": 1},
+        )
+        if not doc:
+            return {}
+        topics_set = set(topics)
+        result: dict[str, list[str]] = {}
+        for proxy in doc.get("document_proxies", []):
+            for label in proxy.get("labels", []):
+                for key in (label.get("topic_id"), label.get("name")):
+                    if key in topics_set:
+                        result.setdefault(key, []).append(proxy["doc_id"])
+        return result
 
     async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:
         await self._collection.update_one(

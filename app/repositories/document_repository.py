@@ -78,6 +78,102 @@ class DocumentRepository:
         query_filter = self._build_filter(query)
         return await self._collection.count_documents(query_filter)
 
+    def _build_vis_match(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+    ) -> dict:
+        """Match stage for a single visualisation topic.
+
+        A document matches the topic when it carries it as a core topic
+        (`acteu_topic.label`), as a db subtopic (`subtopics.label`), or when its
+        id is among the project proxy doc_ids resolved for that topic. The
+        date/language/platform constraints apply uniformly to every source.
+        """
+        topic_clauses: list[dict] = [
+            {"acteu_topic.label": topic},
+            {"subtopics.label": topic},
+        ]
+        if proxy_doc_ids:
+            object_ids = self._coerce_object_ids(proxy_doc_ids)
+            if object_ids:
+                topic_clauses.append({"_id": {"$in": object_ids}})
+
+        match: dict = {"$or": topic_clauses}
+
+        if date_from or date_to:
+            date_filter: dict = {}
+            if date_from:
+                date_filter["$gte"] = date_from
+            if date_to:
+                date_filter["$lte"] = date_to
+            match["published_time"] = date_filter
+
+        if languages:
+            match["language"] = {"$in": languages}
+
+        if platforms:
+            match["platform"] = {"$in": platforms}
+
+        return match
+
+    async def topic_presence_over_time(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+    ) -> list[dict]:
+        """Daily document counts for a topic. Returns [{"date": "YYYY-MM-DD", "count": int}]
+        sorted ascending by date."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+        )
+        pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {"format": "%Y-%m-%d", "date": "$published_time"}
+                    },
+                    "count": {"$sum": 1},
+                }
+            },
+            {"$sort": {"_id": 1}},
+        ]
+        cursor = self._collection.aggregate(pipeline)
+        return [{"date": doc["_id"], "count": doc["count"]} async for doc in cursor]
+
+    async def topic_presence_by_language(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+    ) -> list[dict]:
+        """Document counts per language for a topic. Returns
+        [{"language": str, "count": int}] sorted by count descending."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+        )
+        pipeline = [
+            {"$match": match},
+            {"$group": {"_id": "$language", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1, "_id": 1}},
+        ]
+        cursor = self._collection.aggregate(pipeline)
+        return [
+            {"language": doc["_id"], "count": doc["count"]} async for doc in cursor
+        ]
+
     async def get_excerpt(self, doc_id: str) -> str:
         try:
             object_id = ObjectId(doc_id)
