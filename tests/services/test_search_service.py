@@ -83,8 +83,18 @@ class TestSearch:
 
         await service.search(query)
 
-        repo.find.assert_awaited_once_with(query)
-        repo.count.assert_awaited_once_with(query)
+        repo.find.assert_awaited_once_with(query, None)
+        repo.count.assert_awaited_once_with(query, None)
+
+    async def test_proxy_doc_ids_forwarded_to_repo(self, service, repo):
+        repo.find.return_value = []
+        repo.count.return_value = 0
+        query = SearchQuery(subtopics=["sub-a"])
+
+        await service.search(query, proxy_doc_ids=["d1", "d2"])
+
+        repo.find.assert_awaited_once_with(query, ["d1", "d2"])
+        repo.count.assert_awaited_once_with(query, ["d1", "d2"])
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +242,43 @@ class TestToSummary:
 
         result = await service.search(SearchQuery())
         assert result.retrieved_docs[0].relevant_topics == []
+
+    async def test_document_level_subtopics_appended_after_acteu_topic(self, service, repo):
+        repo.find.return_value = [make_raw_doc(
+            acteu_topic={"label": "gender_issues", "confidence": 0.9},
+            subtopics=[{"topic_id": "legal", "label": "Legal", "confidence": 0.8}],
+        )]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery(subtopics=["legal"]))
+        assert result.retrieved_docs[0].relevant_topics == ["gender_issues", "Legal"]
+
+    async def test_unrequested_document_subtopic_not_appended(self, service, repo):
+        repo.find.return_value = [make_raw_doc(
+            subtopics=[{"topic_id": "legal", "label": "Legal", "confidence": 0.8}],
+        )]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery(subtopics=["other"]))
+        assert result.retrieved_docs[0].relevant_topics == ["immigration"]
+
+    async def test_document_subtopic_below_threshold_not_appended(self, service, repo):
+        repo.find.return_value = [make_raw_doc(
+            subtopics=[{"topic_id": "legal", "label": "Legal", "confidence": 0.3}],
+        )]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery(subtopics=["legal"], confidence_threshold=0.5))
+        assert result.retrieved_docs[0].relevant_topics == ["immigration"]
+
+    async def test_no_subtopics_in_query_appends_nothing(self, service, repo):
+        repo.find.return_value = [make_raw_doc(
+            subtopics=[{"topic_id": "legal", "label": "Legal", "confidence": 0.8}],
+        )]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery())
+        assert result.retrieved_docs[0].relevant_topics == ["immigration"]
 
 
 # ---------------------------------------------------------------------------

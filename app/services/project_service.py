@@ -86,15 +86,14 @@ class ProjectService:
     async def filter_proxies_by_subtopics(
         self,
         project_id: str,
-        doc_ids: list[str],
         subtopics: list[str],
         confidence_threshold: float | None = None,
-    ) -> list[str]:
-        """Returns the subset of doc_ids whose project proxies carry at least one of the
-        requested subtopic labels. When `confidence_threshold` is set, labels whose
-        confidence is below the threshold (or `None`) are not considered a match."""
+    ) -> dict[str, list[str]]:
+        """Returns a mapping of doc_id → matching subtopic names for every project proxy
+        carrying at least one of the requested subtopic labels. When `confidence_threshold`
+        is set, labels whose confidence is below it (or `None`) are excluded."""
         return await self._project_repo.filter_proxy_doc_ids_by_subtopics(
-            project_id, doc_ids, subtopics, confidence_threshold
+            project_id, subtopics, confidence_threshold
         )
 
     async def get_proxy_doc_ids_by_topics(

@@ -10,7 +10,9 @@ class DocumentRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:
         self._collection = db["documents"]
 
-    def _build_filter(self, query: SearchQuery) -> dict:
+    def _build_filter(
+        self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
+    ) -> dict:
         filters: list[dict] = []
 
         for keyword in query.keywords:
@@ -39,13 +41,19 @@ class DocumentRepository:
                 topic_filter["acteu_topic.confidence"] = {"$gte": query.confidence_threshold}
             filters.append(topic_filter)
 
-        # if query.subtopics:
-        #     filters.append({
-        #         "$or": [
-        #             {"subtopics.topic_id": {"$in": query.subtopics}},
-        #             {"subtopics.label": {"$in": query.subtopics}},
-        #         ]
-        #     })
+        # First filter: document-level subtopics
+        # Second filter: directly add document proxies to the results, as they
+        #                contain project-level subtopics.
+        if query.subtopics:
+            elem: dict = {"topic_id": {"$in": query.subtopics}}
+            if query.confidence_threshold is not None:
+                elem["confidence"] = {"$gte": query.confidence_threshold}
+            subtopic_clauses: list[dict] = [{"subtopics": {"$elemMatch": elem}}]
+            if proxy_doc_ids:
+                object_ids = self._coerce_object_ids(proxy_doc_ids)
+                if object_ids:
+                    subtopic_clauses.append({"_id": {"$in": object_ids}})
+            filters.append({"$or": subtopic_clauses})
 
         if not filters:
             return {}
@@ -60,8 +68,10 @@ class DocumentRepository:
                 continue
         return object_ids
 
-    async def find(self, query: SearchQuery) -> list[dict]:
-        query_filter = self._build_filter(query)
+    async def find(
+        self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
+    ) -> list[dict]:
+        query_filter = self._build_filter(query, proxy_doc_ids)
         cursor = self._collection.find(query_filter).sort("published_time", -1).limit(
             settings.DOCUMENT_SEARCH_LIMIT
         )
@@ -74,8 +84,10 @@ class DocumentRepository:
         cursor = self._collection.find({"_id": {"$in": object_ids}})
         return [doc async for doc in cursor]
 
-    async def count(self, query: SearchQuery) -> int:
-        query_filter = self._build_filter(query)
+    async def count(
+        self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
+    ) -> int:
+        query_filter = self._build_filter(query, proxy_doc_ids)
         return await self._collection.count_documents(query_filter)
 
     def _build_vis_match(

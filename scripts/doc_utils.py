@@ -30,8 +30,7 @@ def main() -> int:
 		return 1
 
 	doc_ids = extract_doc_ids(payload)
-	json.dump({"doc_ids": doc_ids}, sys.stdout, ensure_ascii=False)
-	return 0
+	print(json.dumps({"doc_ids": doc_ids}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

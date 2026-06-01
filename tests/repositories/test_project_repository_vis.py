@@ -46,12 +46,12 @@ class TestFindProxyDocIdsByTopics:
         result = await repo.find_proxy_doc_ids_by_topics("p1", ["sub-a"])
         assert result == {"sub-a": ["d1"]}
 
-    async def test_matches_by_name(self, db, repo):
+    async def test_does_not_match_by_name(self, db, repo):
         await insert_project(db, "p1", [
             make_proxy("d1", ("sub-a", "Wind energy")),
         ])
         result = await repo.find_proxy_doc_ids_by_topics("p1", ["Wind energy"])
-        assert result == {"Wind energy": ["d1"]}
+        assert result == {}
 
     async def test_multiple_docs_per_topic(self, db, repo):
         await insert_project(db, "p1", [

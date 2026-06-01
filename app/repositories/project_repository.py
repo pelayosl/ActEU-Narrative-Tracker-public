@@ -57,17 +57,19 @@ class ProjectRepository:
     async def filter_proxy_doc_ids_by_subtopics(
         self,
         project_id: str,
-        doc_ids: list[str],
         subtopics: list[str],
         confidence_threshold: float | None = None,
-    ) -> list[str]:
+    ) -> dict[str, list[str]]:
+        """Returns a mapping of doc_id → matching subtopic names for every project proxy
+        that carries at least one of the requested subtopic labels. When
+        `confidence_threshold` is set, labels whose confidence is below it (or `None`)
+        are excluded."""
         doc = await self._collection.find_one(
             {"project_id": project_id},
             {"document_proxies": 1}
         )
         if not doc:
-            return []
-        doc_ids_set = set(doc_ids)
+            return {}
         subtopics_set = set(subtopics)
 
         def label_matches(label: dict) -> bool:
@@ -78,21 +80,24 @@ class ProjectRepository:
             confidence = label.get("confidence")
             return confidence is not None and confidence >= confidence_threshold
 
-        return [
-            proxy["doc_id"]
-            for proxy in doc.get("document_proxies", [])
-            if proxy["doc_id"] in doc_ids_set
-            and any(label_matches(label) for label in proxy.get("labels", []))
-        ]
+        result: dict[str, list[str]] = {}
+        for proxy in doc.get("document_proxies", []):
+            matching_names = [
+                label["name"]
+                for label in proxy.get("labels", [])
+                if label_matches(label)
+            ]
+            if matching_names:
+                result[proxy["doc_id"]] = matching_names
+        return result
 
     async def find_proxy_doc_ids_by_topics(
         self,
         project_id: str,
         topics: list[str],
     ) -> dict[str, list[str]]:
-        """Maps each requested topic to the list of doc_ids whose project proxies carry a
-        label for it. A label matches when its `topic_id` or `name` equals the topic.
-        Topics with no proxy matches are omitted from the result."""
+        """Maps each requested topic_id to the list of doc_ids whose project proxies carry a
+        label for it. Topics with no proxy matches are omitted from the result."""
         doc = await self._collection.find_one(
             {"project_id": project_id},
             {"document_proxies": 1},
@@ -103,9 +108,9 @@ class ProjectRepository:
         result: dict[str, list[str]] = {}
         for proxy in doc.get("document_proxies", []):
             for label in proxy.get("labels", []):
-                for key in (label.get("topic_id"), label.get("name")):
-                    if key in topics_set:
-                        result.setdefault(key, []).append(proxy["doc_id"])
+                topic_id = label.get("topic_id")
+                if topic_id in topics_set:
+                    result.setdefault(topic_id, []).append(proxy["doc_id"])
         return result
 
     async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:

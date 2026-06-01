@@ -20,8 +20,9 @@ async def search(
     current_user: Annotated[User, Depends(get_current_user)],
     project_id: Annotated[str | None, Query()] = None,
 ) -> SearchResult:
-    result = await service.search(query)
-
+    # Subtopics can either be in the main document database, or exclusively inside a project
+    # proxy_subtopics is used to find whether the selected subtopics are inside a project
+    proxy_subtopics: dict[str, list[str]] = {}
     if query.subtopics and project_id:
         try:
             await project_service.verify_project_owner(project_id, current_user.user_id)
@@ -29,16 +30,27 @@ async def search(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         except ProjectAccessDenied:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-
-        doc_ids = [doc.doc_id for doc in result.retrieved_docs]
-        filtered_ids = set(
-            await project_service.filter_proxies_by_subtopics(
-                project_id, doc_ids, query.subtopics, query.confidence_threshold
-            )
+        
+        # Obtain a dictionary mapping query subtopics to document proxies
+        # This verifies whether the subtopics are project-exclusive
+        proxy_subtopics = await project_service.filter_proxies_by_subtopics(
+            project_id, query.subtopics, query.confidence_threshold
         )
+
+    result = await service.search(query, proxy_doc_ids=list(proxy_subtopics))
+
+    # The document query already filters and enriches document-level subtopics; here we
+    # append the matched project-level subtopic names to the docs that carry them.
+    if proxy_subtopics:
         result = SearchResult(
-            total_docs=len(filtered_ids),
-            retrieved_docs=[doc for doc in result.retrieved_docs if doc.doc_id in filtered_ids],
+            total_docs=result.total_docs,
+            retrieved_docs=[
+                doc.model_copy(update={
+                    "relevant_topics": doc.relevant_topics + proxy_subtopics[doc.doc_id]
+                })
+                if doc.doc_id in proxy_subtopics else doc
+                for doc in result.retrieved_docs
+            ],
         )
 
     return result

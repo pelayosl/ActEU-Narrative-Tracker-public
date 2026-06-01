@@ -246,6 +246,51 @@ class TestFindByIds:
 
 
 # ---------------------------------------------------------------------------
+# subtopic filtering (via find()/count())
+# ---------------------------------------------------------------------------
+
+class TestSubtopicFilter:
+    @pytest.fixture
+    async def with_subtopics(self, db):
+        docs = [
+            make_doc(headline="doc-legal", subtopics=[
+                {"topic_id": "legal", "label": "Legal", "confidence": 0.9},
+            ]),
+            make_doc(headline="doc-scandal-low", subtopics=[
+                {"topic_id": "scandal", "label": "Scandal", "confidence": 0.3},
+            ]),
+            make_doc(headline="doc-none", subtopics=[]),
+        ]
+        result = await db["documents"].insert_many(docs)
+        return [str(oid) for oid in result.inserted_ids]
+
+    async def test_document_level_match_by_topic_id(self, repo, with_subtopics):
+        docs = await repo.find(SearchQuery(subtopics=["legal"]))
+        assert [d["headline"] for d in docs] == ["doc-legal"]
+
+    async def test_no_match_returns_empty(self, repo, with_subtopics):
+        assert await repo.find(SearchQuery(subtopics=["unknown"])) == []
+
+    async def test_confidence_threshold_excludes_low(self, repo, with_subtopics):
+        docs = await repo.find(SearchQuery(subtopics=["scandal"], confidence_threshold=0.5))
+        assert docs == []
+
+    async def test_confidence_threshold_includes_high(self, repo, with_subtopics):
+        docs = await repo.find(SearchQuery(subtopics=["legal"], confidence_threshold=0.5))
+        assert len(docs) == 1
+
+    async def test_proxy_doc_ids_unioned_with_document_level(self, repo, with_subtopics):
+        """A doc with no document-level subtopic is still returned when supplied as a
+        project proxy match — the two sources are OR-ed."""
+        none_id = with_subtopics[2]
+        docs = await repo.find(SearchQuery(subtopics=["legal"]), proxy_doc_ids=[none_id])
+        assert {d["headline"] for d in docs} == {"doc-legal", "doc-none"}
+
+    async def test_count_reflects_subtopic_filter(self, repo, with_subtopics):
+        assert await repo.count(SearchQuery(subtopics=["legal"])) == 1
+
+
+# ---------------------------------------------------------------------------
 # count()
 # ---------------------------------------------------------------------------
 
