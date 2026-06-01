@@ -11,13 +11,14 @@ from ingestion import (
     PRESUMED_ISSUE_MAP,
     LANGUAGE_TO_COUNTRY,
     extract_acteu_topic,
+    extract_acteu_subtopic,
     extract_sentiment,
     extract_named_entities,
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\telegram\\telegram-es.ndjson")
-OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\telegram\\telegram-es-db.ndjson")
+INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\telegram\\telegram-fi.ndjson")
+OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\telegram\\telegram-fi-db.ndjson")
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -29,7 +30,7 @@ def transform_telegram(raw: dict) -> dict | None:
     headline = raw.get("telegram_header_title", "").strip()
     author = raw.get("telegram_message_author", "").strip()
 
-    language = raw.get("language_detected", "")
+    language = raw.get("language") or raw.get("language_detected", "")
     country = LANGUAGE_TO_COUNTRY.get(language, language.upper() if language else None)
 
     annotations = raw.get("annotations", {})
@@ -43,7 +44,7 @@ def transform_telegram(raw: dict) -> dict | None:
         "published_time": raw.get("published_time"),
         "author": author,
         "acteu_topic": extract_acteu_topic(annotations),
-        "subtopics": [],
+        "subtopics": extract_acteu_subtopic(annotations),
         "named_entities": extract_named_entities(raw),
         "sentiment": extract_sentiment(annotations),
     }

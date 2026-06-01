@@ -24,9 +24,14 @@ Usage:
 
 import json
 import os
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Ensure project root is on sys.path when running this script directly
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from pymongo import MongoClient
 from app.infrastructure.password_hasher import PasswordHasher
@@ -94,6 +99,21 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 ADMIN_PROJECT_NAME = os.getenv("ADMIN_PROJECT_NAME", "Default Project")
 
 
+def parse_published_time(value):
+    """Parse an ISO-8601 published_time string into a datetime so it is stored as a
+    BSON Date (not a string). Naive timestamps are treated as UTC. Returns the value
+    unchanged if it is missing or unparseable."""
+    if not isinstance(value, str):
+        return value
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def load_platform_dir(platform_dir: Path, collection) -> tuple[int, int]:
     """
     Load all ndjson files in a platform directory into the given collection.
@@ -126,7 +146,8 @@ def load_platform_dir(platform_dir: Path, collection) -> tuple[int, int]:
                     file_skipped += 1
                     continue
 
-                doc.pop("subtopics", None)  # subtopics live in project document_proxies, not in documents
+                doc["subtopics"] = doc.get("subtopics", [])
+                doc["published_time"] = parse_published_time(doc.get("published_time"))
                 batch.append(doc)
 
                 if len(batch) >= BATCH_SIZE:

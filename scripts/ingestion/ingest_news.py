@@ -14,13 +14,14 @@ from ingestion import (
     PRESUMED_ISSUE_MAP,
     LANGUAGE_TO_COUNTRY,
     extract_acteu_topic,
+    extract_acteu_subtopic,
     extract_sentiment,
     extract_named_entities,
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-INPUT_DIR = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\news\\es")
-OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\news\\news-es-db.ndjson")
+INPUT_DIR = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\news\\fi")
+OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\news\\news-fi-db.ndjson")
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -35,8 +36,12 @@ def transform_news(raw: dict) -> dict | None:
         headline = headline[0] if headline else ""
     headline = headline.strip()
 
-    author = raw.get("site_name", "").strip()
-    language = raw.get("language_detected", "")
+    author = raw.get("site_name", "")
+    if isinstance(author, list):
+        author = author[0] if author else ""
+    author = author.strip()
+
+    language = raw.get("language") or raw.get("language_detected", "")
     country = LANGUAGE_TO_COUNTRY.get(language, language.upper() if language else None)
 
     annotations = raw.get("annotations", {})
@@ -50,7 +55,7 @@ def transform_news(raw: dict) -> dict | None:
         "published_time": raw.get("published_time"),
         "author": author,
         "acteu_topic": extract_acteu_topic(annotations),
-        "subtopics": [],
+        "subtopics": extract_acteu_subtopic(annotations),
         "named_entities": extract_named_entities(raw),
         "sentiment": extract_sentiment(annotations),
     }

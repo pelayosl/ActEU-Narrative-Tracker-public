@@ -3,6 +3,7 @@ Data ingestion main module — ActEU Narrative Tracker
 """
 
 import re
+import uuid
 
 PRESUMED_ISSUE_MAP = {
     "Migration": "immigration",
@@ -27,7 +28,6 @@ LANGUAGE_TO_COUNTRY = {
 def extract_acteu_topic(annotations: dict) -> dict | None:
     """
     Extracts core topic from PresumedIssue.
-    If a core topic has confidence above 0.6, it wins over any non-core topic
     """
     presumed_issue = annotations.get("PresumedIssue", {})
     if not presumed_issue:
@@ -35,7 +35,7 @@ def extract_acteu_topic(annotations: dict) -> dict | None:
 
     core_candidates = [
         (label, conf) for label, conf in presumed_issue.items()
-        if label in PRESUMED_ISSUE_MAP and conf > 0.6
+        if label in PRESUMED_ISSUE_MAP
     ]
     if core_candidates:
         best_label, best_confidence = max(core_candidates, key=lambda x: x[1])
@@ -95,4 +95,25 @@ def extract_named_entities(raw: dict) -> list[dict]:
         entities.append({"text": canonical_text})
 
     return entities
+
+def extract_acteu_subtopic(annotations: dict) -> list[dict]:
+    """
+    Extracts all subtopics from FirstSubtopic annotation.
+    Skips 'N/A' labels as they are not meaningful.
+    Returns a list of subtopic objects, one for each non-N/A label.
+    """
+    first_subtopic = annotations.get("FirstSubtopic", {})
+    if not first_subtopic:
+        return []
+    
+    # Filter out N/A labels
+    entries = [(label, conf) for label, conf in first_subtopic.items() if label != "N/A"]
+    if not entries:
+        return []
+    
+    return [{
+        "topic_id": str(uuid.uuid4()),
+        "label": label,
+        "confidence": confidence
+    } for label, confidence in entries]
 
