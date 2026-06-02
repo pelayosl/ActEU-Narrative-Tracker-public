@@ -17,6 +17,7 @@ def document_repo() -> AsyncMock:
     repo.topic_presence_over_time.return_value = []
     repo.topic_presence_by_language.return_value = []
     repo.topic_presence_by_platform.return_value = []
+    repo.entities_for_topic.return_value = []
     return repo
 
 
@@ -55,7 +56,6 @@ class TestLoadDashboard:
 
     async def test_unimplemented_blocks_are_empty(self, service):
         result = await service.load_dashboard(make_query())
-        assert result.top_actors == []
         assert result.relevant_documents == []
 
     async def test_no_project_skips_proxy_resolution(self, service, project_service):
@@ -171,4 +171,49 @@ class TestTopicsByPlatform:
         project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
         await service.load_dashboard(make_query(), project_id="p1")
         args = document_repo.topic_presence_by_platform.call_args.args
+        assert args[5] == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# top_entities (PageRank)
+# ---------------------------------------------------------------------------
+
+class TestTopEntities:
+    async def test_ranks_entities_per_topic(self, service, document_repo):
+        document_repo.entities_for_topic.return_value = [
+            ["Spain", "EU"],
+            ["Spain", "EU"],
+            ["Spain", "Lampedusa"],
+        ]
+        result = await service.load_dashboard(make_query(topics=["immigration"]))
+
+        assert len(result.top_entities) == 1
+        topic_entities = result.top_entities[0]
+        assert topic_entities.topic == "immigration"
+        names = [e.entity for e in topic_entities.entities]
+        assert "Spain" in names
+        # scores are floats and present
+        assert all(isinstance(e.score, float) for e in topic_entities.entities)
+
+    async def test_caps_at_five_entities(self, service, document_repo):
+        document_repo.entities_for_topic.return_value = [
+            ["A", "B", "C", "D", "E", "F", "G"],
+        ]
+        result = await service.load_dashboard(make_query(topics=["immigration"]))
+        assert len(result.top_entities[0].entities) == 5
+
+    async def test_empty_entities_yields_empty_list(self, service, document_repo):
+        document_repo.entities_for_topic.return_value = []
+        result = await service.load_dashboard(make_query(topics=["immigration"]))
+        assert result.top_entities[0].entities == []
+
+    async def test_one_entry_per_topic(self, service, document_repo):
+        result = await service.load_dashboard(make_query(topics=["a", "b", "c"]))
+        assert [te.topic for te in result.top_entities] == ["a", "b", "c"]
+        assert document_repo.entities_for_topic.await_count == 3
+
+    async def test_proxy_doc_ids_forwarded(self, service, document_repo, project_service):
+        project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
+        await service.load_dashboard(make_query(), project_id="p1")
+        args = document_repo.entities_for_topic.call_args.args
         assert args[5] == ["a", "b"]

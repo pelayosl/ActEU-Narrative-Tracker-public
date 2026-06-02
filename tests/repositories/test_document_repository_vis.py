@@ -252,3 +252,59 @@ class TestTopicPresenceByPlatform:
         await db["documents"].insert_one(make_doc())
         result = await repo.topic_presence_by_platform("nonexistent", D_FROM, D_TO, [], [])
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# entities_for_topic()
+# ---------------------------------------------------------------------------
+
+class TestEntitiesForTopic:
+    async def test_returns_entity_lists_per_doc(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(named_entities=[{"text": "Spain"}, {"text": "EU"}]),
+            make_doc(named_entities=[{"text": "Lampedusa"}]),
+        ])
+        result = await repo.entities_for_topic("immigration", D_FROM, D_TO, [], [])
+        assert sorted(result, key=len) == [["Lampedusa"], ["Spain", "EU"]]
+
+    async def test_omits_docs_without_entities(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(named_entities=[{"text": "Spain"}]),
+            make_doc(named_entities=[]),
+        ])
+        result = await repo.entities_for_topic("immigration", D_FROM, D_TO, [], [])
+        assert result == [["Spain"]]
+
+    async def test_only_matching_topic(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.9},
+                     named_entities=[{"text": "Spain"}]),
+            make_doc(acteu_topic={"label": "climate_change", "confidence": 0.9},
+                     named_entities=[{"text": "COP29"}]),
+        ])
+        result = await repo.entities_for_topic("immigration", D_FROM, D_TO, [], [])
+        assert result == [["Spain"]]
+
+    async def test_matches_proxy_doc_ids(self, db, repo):
+        res = await db["documents"].insert_one(make_doc(
+            acteu_topic={"label": "other", "confidence": 0.9},
+            named_entities=[{"text": "ProjectActor"}],
+        ))
+        proxy_id = str(res.inserted_id)
+        result = await repo.entities_for_topic(
+            "project_sub", D_FROM, D_TO, [], [], proxy_doc_ids=[proxy_id]
+        )
+        assert result == [["ProjectActor"]]
+
+    async def test_language_filter(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(language="es", named_entities=[{"text": "Spain"}]),
+            make_doc(language="fi", named_entities=[{"text": "Finland"}]),
+        ])
+        result = await repo.entities_for_topic("immigration", D_FROM, D_TO, ["fi"], [])
+        assert result == [["Finland"]]
+
+    async def test_no_match_returns_empty(self, db, repo):
+        await db["documents"].insert_one(make_doc(named_entities=[{"text": "Spain"}]))
+        result = await repo.entities_for_topic("nonexistent", D_FROM, D_TO, [], [])
+        assert result == []

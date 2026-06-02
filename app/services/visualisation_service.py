@@ -1,15 +1,20 @@
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.visualisation import (
     Dashboard,
+    EntityScore,
     LanguageCount,
     PlatformCount,
     TimePoint,
+    TopicEntities,
     TopicLanguageBreakdown,
     TopicPlatformBreakdown,
     TopicTimeSeries,
     VisualisationQuery,
 )
+from app.services.pagerank import top_entities
 from app.services.project_service import ProjectService
+
+TOP_ENTITIES_LIMIT = 5
 
 
 class VisualisationService:
@@ -29,12 +34,13 @@ class VisualisationService:
         topic_evolution = await self._topic_evolution(query, proxy_doc_ids)
         topics_by_language = await self._topics_by_language(query, proxy_doc_ids)
         topics_by_platform = await self._topics_by_platform(query, proxy_doc_ids)
+        top_entities_by_topic = await self._top_entities(query, proxy_doc_ids)
 
         return Dashboard(
             topic_evolution=topic_evolution,
             topics_by_language=topics_by_language,
             topics_by_platform=topics_by_platform,
-            top_actors=[],
+            top_entities=top_entities_by_topic,
             relevant_documents=[],
         )
 
@@ -115,3 +121,27 @@ class VisualisationService:
                 )
             )
         return breakdowns
+
+    async def _top_entities(
+        self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
+    ) -> list[TopicEntities]:
+        results: list[TopicEntities] = []
+        for topic in query.topics:
+            doc_entity_lists = await self._document_repo.entities_for_topic(
+                topic,
+                query.date_from,
+                query.date_to,
+                query.languages,
+                query.platforms,
+                proxy_doc_ids.get(topic),
+            )
+            ranked = top_entities(doc_entity_lists, limit=TOP_ENTITIES_LIMIT)
+            results.append(
+                TopicEntities(
+                    topic=topic,
+                    entities=[
+                        EntityScore(entity=name, score=score) for name, score in ranked
+                    ],
+                )
+            )
+        return results

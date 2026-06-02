@@ -64,7 +64,9 @@ class OllamaRepresentation(BaseRepresentation):
                 updated[topic_id] = word_scores
                 continue
             keywords = [w for w, _ in word_scores[:self.KEYWORD_LIMIT]]
-            rep_docs = topic_model.get_representative_docs(topic_id) or []
+            # Pull the cluster's documents from the `documents` DataFrame that
+            # BERTopic passes in (columns: Document / ID / Topic) for getting representative documents.
+            rep_docs = documents.loc[documents["Topic"] == topic_id, "Document"].head(4).tolist()
             name, description = _call_ollama(keywords, rep_docs)
             self._labels[topic_id] = (name, description)
             # BERTopic uses the first entry as the display label, we add the rest afterwards
@@ -171,7 +173,7 @@ async def _store_pending_pipeline(
 
 
 def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str]:
-    keywords_str = ", ".join(keywords[:10])
+    keywords_str = ", ".join(keywords[:20])
     docs_str = "\n".join(f"- {doc[:300]}" for doc in rep_docs[:4])
 
     prompt = (
@@ -181,7 +183,7 @@ def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str]:
         "Don't mention the keywords in your description. Your topic answer will substitute the keywords provided by BERTopic, "
         "and your description must be exclusively centred around providing context to the topic itself.\n\n"
         f"Keywords: {keywords_str}\n\n"
-        f"Representative documents:\n{docs_str}\n\n"
+        f"Example documents from this cluster:\n{docs_str}\n\n"
         'Respond ONLY with valid JSON: {"name": "...", "description": "..."}'
     )
 

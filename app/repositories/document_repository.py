@@ -210,6 +210,33 @@ class DocumentRepository:
             {"platform": doc["_id"], "count": doc["count"]} async for doc in cursor
         ]
 
+    async def entities_for_topic(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+    ) -> list[list[str]]:
+        """Per-document entity name lists for a topic. 
+        Returns one inner list per matching document, e.g.
+        [["Spain", "Lampedusa"], ["EU"], ...]. Documents with no entities are omitted."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+        )
+        pipeline = [
+            {"$match": match},
+            {"$project": {"_id": 0, "entities": "$named_entities.text"}},
+        ]
+        cursor = self._collection.aggregate(pipeline)
+        result: list[list[str]] = []
+        async for doc in cursor:
+            entities = doc.get("entities") or []
+            if entities:
+                result.append(entities)
+        return result
+
     async def get_excerpt(self, doc_id: str) -> str:
         try:
             object_id = ObjectId(doc_id)

@@ -11,10 +11,14 @@ class VisualisationQuery(BaseModel):
     platforms: list[str]
 
 
-class Actor(BaseModel):
-    name: str
-    sentiment: str
-    document_count: int
+class EntityScore(BaseModel):
+    entity: str
+    score: float
+
+
+class TopicEntities(BaseModel):
+    topic: str
+    entities: list[EntityScore]
 
 
 class TimePoint(BaseModel):
@@ -61,5 +65,5 @@ class Dashboard(BaseModel):
     topic_evolution: list[TopicTimeSeries]
     topics_by_language: list[TopicLanguageBreakdown]
     topics_by_platform: list[TopicPlatformBreakdown]
-    top_actors: list[Actor]
+    top_entities: list[TopicEntities]
     relevant_documents: list[DocumentPreview]
