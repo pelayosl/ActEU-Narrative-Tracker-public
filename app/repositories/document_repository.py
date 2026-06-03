@@ -237,6 +237,88 @@ class DocumentRepository:
                 result.append(entities)
         return result
 
+    async def relevant_documents(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Top documents for a topic ranked by their confidence for that topic.
+
+        Relevance is the document's confidence for the matched topic: the core
+        `acteu_topic.confidence` when matched as a core topic, the matching
+        `subtopics[].confidence` when matched as a db subtopic, or `None` when the
+        document only matched via a project proxy id (Phase-1 proxies carry no
+        confidence). Documents with no confidence rank below any confident match.
+
+        Returns up to `limit` dicts with keys: doc_id, platform, language,
+        published_time, plain_text, relevance (float | None)."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+        )
+        pipeline = [
+            {"$match": match},
+            {
+                "$addFields": {
+                    "_relevance": {
+                        "$cond": [
+                            {"$eq": ["$acteu_topic.label", topic]},
+                            "$acteu_topic.confidence",
+                            {
+                                "$let": {
+                                    "vars": {
+                                        "matched": {
+                                            "$filter": {
+                                                "input": {"$ifNull": ["$subtopics", []]},
+                                                "as": "s",
+                                                "cond": {"$eq": ["$$s.label", topic]},
+                                            }
+                                        }
+                                    },
+                                    "in": {
+                                        "$cond": [
+                                            {"$gt": [{"$size": "$$matched"}, 0]},
+                                            {"$max": "$$matched.confidence"},
+                                            None,
+                                        ]
+                                    },
+                                }
+                            },
+                        ]
+                    }
+                }
+            },
+            # Sort confident matches first; documents with no confidence rank last.
+            {"$sort": {"_relevance": -1, "_id": 1}},
+            {"$limit": limit},
+            {
+                "$project": {
+                    "_id": 1,
+                    "platform": 1,
+                    "language": 1,
+                    "published_time": 1,
+                    "plain_text": 1,
+                    "relevance": "$_relevance",
+                }
+            },
+        ]
+        cursor = self._collection.aggregate(pipeline)
+        return [
+            {
+                "doc_id": str(doc["_id"]),
+                "platform": doc.get("platform") or "",
+                "language": doc.get("language") or "",
+                "published_time": doc.get("published_time"),
+                "plain_text": doc.get("plain_text") or "",
+                "relevance": doc.get("relevance"),
+            }
+            async for doc in cursor
+        ]
+
     async def get_excerpt(self, doc_id: str) -> str:
         try:
             object_id = ObjectId(doc_id)

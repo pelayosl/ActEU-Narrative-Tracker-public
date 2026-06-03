@@ -1,6 +1,7 @@
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.visualisation import (
     Dashboard,
+    DocumentPreview,
     EntityScore,
     LanguageCount,
     PlatformCount,
@@ -15,6 +16,8 @@ from app.services.pagerank import top_entities
 from app.services.project_service import ProjectService
 
 TOP_ENTITIES_LIMIT = 5
+RELEVANT_DOCUMENTS_LIMIT = 10
+EXCERPT_MAX_CHARS = 250
 
 
 class VisualisationService:
@@ -35,13 +38,14 @@ class VisualisationService:
         topics_by_language = await self._topics_by_language(query, proxy_doc_ids)
         topics_by_platform = await self._topics_by_platform(query, proxy_doc_ids)
         top_entities_by_topic = await self._top_entities(query, proxy_doc_ids)
+        relevant_documents = await self._relevant_documents(query, proxy_doc_ids)
 
         return Dashboard(
             topic_evolution=topic_evolution,
             topics_by_language=topics_by_language,
             topics_by_platform=topics_by_platform,
             top_entities=top_entities_by_topic,
-            relevant_documents=[],
+            relevant_documents=relevant_documents,
         )
 
     async def _resolve_proxy_doc_ids(
@@ -145,3 +149,59 @@ class VisualisationService:
                 )
             )
         return results
+
+    async def _relevant_documents(
+        self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
+    ) -> list[DocumentPreview]:
+        """Single merged list across all query topics: each document's relevance is the
+        highest confidence it has for any matched query topic. Deduplicated by document,
+        sorted by relevance descending, capped at RELEVANT_DOCUMENTS_LIMIT."""
+        best: dict[str, dict] = {}
+        for topic in query.topics:
+            docs = await self._document_repo.relevant_documents(
+                topic,
+                query.date_from,
+                query.date_to,
+                query.languages,
+                query.platforms,
+                proxy_doc_ids.get(topic),
+                limit=RELEVANT_DOCUMENTS_LIMIT,
+            )
+            for doc in docs:
+                doc = {**doc, "topic": topic}
+                existing = best.get(doc["doc_id"])
+                if existing is None or self._relevance_rank(doc) > self._relevance_rank(existing):
+                    best[doc["doc_id"]] = doc
+
+        ranked = sorted(
+            best.values(),
+            key=lambda d: (self._relevance_rank(d), d["doc_id"]),
+            reverse=True,
+        )[:RELEVANT_DOCUMENTS_LIMIT]
+
+        return [
+            DocumentPreview(
+                doc_id=d["doc_id"],
+                platform=d["platform"],
+                language=d["language"],
+                date=d["published_time"],
+                topic=d["topic"],
+                relevance_score=d["relevance"] if d["relevance"] is not None else 0.0,
+                excerpt=self._excerpt(d["plain_text"]),
+            )
+            for d in ranked
+        ]
+
+    @staticmethod
+    def _relevance_rank(doc: dict) -> float:
+        """Sort key: documents with no confidence (proxy-only matches) rank below any
+        confident match."""
+        relevance = doc.get("relevance")
+        return relevance if relevance is not None else -1.0
+
+    @staticmethod
+    def _excerpt(plain_text: str) -> str:
+        text = (plain_text or "").strip()
+        if len(text) > EXCERPT_MAX_CHARS:
+            return f"{text[:EXCERPT_MAX_CHARS].rstrip()}..."
+        return text
