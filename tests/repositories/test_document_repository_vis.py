@@ -308,3 +308,98 @@ class TestEntitiesForTopic:
         await db["documents"].insert_one(make_doc(named_entities=[{"text": "Spain"}]))
         result = await repo.entities_for_topic("nonexistent", D_FROM, D_TO, [], [])
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# relevant_documents()
+# ---------------------------------------------------------------------------
+
+class TestRelevantDocuments:
+    async def test_core_topic_uses_acteu_confidence(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.6}),
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.95}),
+        ])
+        result = await repo.relevant_documents("immigration", D_FROM, D_TO, [], [])
+        assert [round(d["relevance"], 2) for d in result] == [0.95, 0.6]
+
+    async def test_sorted_by_relevance_descending(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(acteu_topic={"label": "immigration", "confidence": c})
+            for c in (0.3, 0.9, 0.5)
+        ])
+        result = await repo.relevant_documents("immigration", D_FROM, D_TO, [], [])
+        scores = [d["relevance"] for d in result]
+        assert scores == sorted(scores, reverse=True)
+
+    async def test_limit_is_respected(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.5})
+            for _ in range(15)
+        ])
+        result = await repo.relevant_documents("immigration", D_FROM, D_TO, [], [], limit=10)
+        assert len(result) == 10
+
+    async def test_db_subtopic_uses_subtopic_confidence(self, db, repo):
+        await db["documents"].insert_one(make_doc(
+            acteu_topic={"label": "climate_change", "confidence": 0.99},
+            subtopics=[{"topic_id": "t1", "label": "wind_energy", "confidence": 0.42}],
+        ))
+        result = await repo.relevant_documents("wind_energy", D_FROM, D_TO, [], [])
+        assert len(result) == 1
+        # relevance comes from the matched subtopic, not the (higher) core topic
+        assert round(result[0]["relevance"], 2) == 0.42
+
+    async def test_proxy_match_has_none_relevance(self, db, repo):
+        res = await db["documents"].insert_one(make_doc(
+            acteu_topic={"label": "other", "confidence": 0.9},
+        ))
+        proxy_id = str(res.inserted_id)
+        result = await repo.relevant_documents(
+            "project_sub", D_FROM, D_TO, [], [], proxy_doc_ids=[proxy_id]
+        )
+        assert len(result) == 1
+        assert result[0]["relevance"] is None
+
+    async def test_confident_matches_rank_above_none(self, db, repo):
+        confident = await db["documents"].insert_one(
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.7})
+        )
+        proxy_only = await db["documents"].insert_one(
+            make_doc(acteu_topic={"label": "other", "confidence": 0.9})
+        )
+        # both resolve to "immigration": one by core topic, one by proxy id
+        result = await repo.relevant_documents(
+            "immigration", D_FROM, D_TO, [], [], proxy_doc_ids=[str(proxy_only.inserted_id)]
+        )
+        assert len(result) == 2
+        assert result[0]["doc_id"] == str(confident.inserted_id)
+        assert result[0]["relevance"] == 0.7
+        assert result[1]["relevance"] is None
+
+    async def test_projects_expected_fields(self, db, repo):
+        await db["documents"].insert_one(make_doc(
+            platform="telegram", language="de",
+            acteu_topic={"label": "immigration", "confidence": 0.8},
+        ))
+        result = await repo.relevant_documents("immigration", D_FROM, D_TO, [], [])
+        doc = result[0]
+        assert set(doc.keys()) == {
+            "doc_id", "platform", "language", "published_time", "plain_text", "relevance"
+        }
+        assert doc["platform"] == "telegram"
+        assert doc["language"] == "de"
+
+    async def test_language_filter(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(language="es", acteu_topic={"label": "immigration", "confidence": 0.8}),
+            make_doc(language="fi", acteu_topic={"label": "immigration", "confidence": 0.9}),
+        ])
+        result = await repo.relevant_documents("immigration", D_FROM, D_TO, ["fi"], [])
+        assert len(result) == 1
+        assert result[0]["language"] == "fi"
+
+    async def test_no_match_returns_empty(self, db, repo):
+        await db["documents"].insert_one(make_doc())
+        result = await repo.relevant_documents("nonexistent", D_FROM, D_TO, [], [])
+        assert result == []

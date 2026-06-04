@@ -18,6 +18,7 @@ def document_repo() -> AsyncMock:
     repo.topic_presence_by_language.return_value = []
     repo.topic_presence_by_platform.return_value = []
     repo.entities_for_topic.return_value = []
+    repo.relevant_documents.return_value = []
     return repo
 
 
@@ -54,7 +55,7 @@ class TestLoadDashboard:
         result = await service.load_dashboard(make_query())
         assert isinstance(result, Dashboard)
 
-    async def test_unimplemented_blocks_are_empty(self, service):
+    async def test_empty_repo_results_yield_empty_relevant_documents(self, service):
         result = await service.load_dashboard(make_query())
         assert result.relevant_documents == []
 
@@ -216,4 +217,89 @@ class TestTopEntities:
         project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
         await service.load_dashboard(make_query(), project_id="p1")
         args = document_repo.entities_for_topic.call_args.args
+        assert args[5] == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# relevant_documents
+# ---------------------------------------------------------------------------
+
+def make_relevant(doc_id, relevance, **overrides):
+    base = {
+        "doc_id": doc_id,
+        "platform": "twitter",
+        "language": "es",
+        "published_time": datetime(2024, 6, 1, tzinfo=timezone.utc),
+        "plain_text": "Some content.",
+        "relevance": relevance,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestRelevantDocuments:
+    async def test_maps_repo_fields_to_preview(self, service, document_repo):
+        document_repo.relevant_documents.return_value = [
+            make_relevant("d1", 0.9, platform="telegram", language="de"),
+        ]
+        result = await service.load_dashboard(make_query(topics=["immigration"]))
+
+        assert len(result.relevant_documents) == 1
+        rd = result.relevant_documents[0]
+        assert rd.doc_id == "d1"
+        assert rd.platform == "telegram"
+        assert rd.language == "de"
+        assert rd.topic == "immigration"
+        assert rd.relevance_score == 0.9
+
+    async def test_none_relevance_becomes_zero(self, service, document_repo):
+        document_repo.relevant_documents.return_value = [make_relevant("d1", None)]
+        result = await service.load_dashboard(make_query(topics=["sub"]))
+        assert result.relevant_documents[0].relevance_score == 0.0
+
+    async def test_merged_and_sorted_across_topics(self, service, document_repo):
+        def per_topic(topic, *args, **kwargs):
+            return {
+                "a": [make_relevant("d1", 0.4)],
+                "b": [make_relevant("d2", 0.95)],
+            }[topic]
+        document_repo.relevant_documents.side_effect = per_topic
+
+        result = await service.load_dashboard(make_query(topics=["a", "b"]))
+        ids = [r.doc_id for r in result.relevant_documents]
+        assert ids == ["d2", "d1"]
+
+    async def test_dedup_keeps_highest_relevance(self, service, document_repo):
+        def per_topic(topic, *args, **kwargs):
+            # same doc matched by two topics with different confidence
+            return {
+                "a": [make_relevant("d1", 0.3)],
+                "b": [make_relevant("d1", 0.8)],
+            }[topic]
+        document_repo.relevant_documents.side_effect = per_topic
+
+        result = await service.load_dashboard(make_query(topics=["a", "b"]))
+        assert len(result.relevant_documents) == 1
+        assert result.relevant_documents[0].relevance_score == 0.8
+
+    async def test_capped_at_ten(self, service, document_repo):
+        document_repo.relevant_documents.return_value = [
+            make_relevant(f"d{i}", 0.5 + i / 100) for i in range(15)
+        ]
+        result = await service.load_dashboard(make_query(topics=["immigration"]))
+        assert len(result.relevant_documents) == 10
+
+    async def test_long_excerpt_truncated_to_250(self, service, document_repo):
+        document_repo.relevant_documents.return_value = [
+            make_relevant("d1", 0.9, plain_text="A" * 400)
+        ]
+        result = await service.load_dashboard(make_query(topics=["immigration"]))
+        excerpt = result.relevant_documents[0].excerpt
+        assert excerpt.endswith("...")
+        assert len(excerpt) <= 253
+
+    async def test_proxy_doc_ids_forwarded(self, service, document_repo, project_service):
+        project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
+        await service.load_dashboard(make_query(), project_id="p1")
+        args = document_repo.relevant_documents.call_args.args
         assert args[5] == ["a", "b"]
