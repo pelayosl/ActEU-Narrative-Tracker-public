@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from app.exceptions import (
     ClassifierNotFound,
     NoPendingPipeline,
+    PendingPipelineMismatch,
     ProjectAccessDenied,
     ProjectNotFound,
 )
@@ -114,6 +115,12 @@ class ProjectService:
     async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:
         await self._project_repo.set_pending_pipeline(project_id, pipeline)
 
+    async def stamp_pipeline_classifier(self, project_id: str, classifier_id: str) -> None:
+        """Stamp the trained classifier's ID onto the pending pipeline.
+        Called by ClassifierTrainingTask after save_classifier succeeds, so that
+        apply_pipeline_labels can verify the pipeline still belongs to this classifier."""
+        await self._project_repo.stamp_pipeline_classifier(project_id, classifier_id)
+
     async def update_reconciled_topics(
         self, project_id: str, reconciled_topics: list[Topic]
     ) -> None:
@@ -135,7 +142,9 @@ class ProjectService:
         """Phase 1 labelling: writes proxies for the documents already in topic_mapping
         using the classifier's topics. Clears the pending pipeline on success.
         Raises NoPendingPipeline if no pipeline is present, ClassifierNotFound if the
-        classifier does not belong to the project."""
+        classifier does not belong to the project, PendingPipelineMismatch if the
+        pipeline was overwritten by a newer run and no longer belongs to this
+        classifier (in which case the pipeline is NOT cleared)."""
         pipeline = await self._project_repo.find_pending_pipeline(project_id)
         if pipeline is None:
             raise NoPendingPipeline
@@ -143,6 +152,13 @@ class ProjectService:
         classifier = await self._project_repo.find_classifier(project_id, classifier_id)
         if classifier is None:
             raise ClassifierNotFound
+
+        # Verify the pending pipeline still belongs to this classifier.
+        # classifier_id is stamped onto the pipeline by ClassifierTrainingTask.
+        # None means training hasn't completed yet, or a new run overwrote the pipeline.
+        # Either way, Phase 1 is not available for a classifier when pipeline classifier ID is "None".
+        if pipeline.classifier_id != classifier_id:
+            raise PendingPipelineMismatch
 
         topic_mapping = pipeline.topic_mapping
 

@@ -35,5 +35,13 @@ class NoPendingPipeline(Exception):
     pass
 
 
+class PendingPipelineMismatch(Exception):
+    """Raised when a pending pipeline exists but its topic_mapping does not
+    belong to the classifier targeted for Phase 1 labelling — i.e. the user
+    started a new pipeline run before triggering Phase 1 for an earlier classifier."""
+
+    pass
+
+
 class LabellingLocked(Exception):
     pass

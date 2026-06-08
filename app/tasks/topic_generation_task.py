@@ -130,6 +130,9 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
     _update(task, 97, "Storing results")
 
     # Group filtered_doc_ids by their assigned topic
+    # BERTopic returns a list of topics ordered the same
+    # way as input texts, so topic in position 1 corresponds to the
+    # input text in position 1.
     topic_doc_ids: dict[int, list[str]] = defaultdict(list)
     for idx, bert_topic_id in enumerate(topic_assignments):
         if bert_topic_id != -1:

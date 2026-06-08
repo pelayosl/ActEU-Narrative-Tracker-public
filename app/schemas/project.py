@@ -12,6 +12,7 @@ class PendingPipeline(BaseModel):
     reconciled_topics: list[Topic] = []
     topic_mapping: dict[str, list[str]] = {}
     created_at: datetime
+    classifier_id: str | None = None  # stamped by ClassifierTrainingTask on success
 
 
 class Project(BaseModel):

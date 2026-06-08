@@ -86,5 +86,6 @@ async def _run(topics: list[dict], project_id: str, name: str) -> dict:
 
     async with project_service_context() as project_service:
         await project_service.save_classifier(project_id, metadata)
+        await project_service.stamp_pipeline_classifier(project_id, classifier_id)
 
     return metadata.model_dump()

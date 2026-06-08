@@ -119,6 +119,12 @@ class ProjectRepository:
             {"$set": {"pending_pipeline": pipeline.model_dump()}},
         )
 
+    async def stamp_pipeline_classifier(self, project_id: str, classifier_id: str) -> None:
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {"$set": {"pending_pipeline.classifier_id": classifier_id}},
+        )
+
     async def update_reconciled_topics(
         self, project_id: str, reconciled_topics: list[Topic]
     ) -> None:
