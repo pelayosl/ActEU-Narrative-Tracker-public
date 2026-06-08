@@ -9,6 +9,7 @@ from app.tasks.task_context import (
 )
 from app.schemas.classification import DocumentProxy, LabellingResult, ProxyLabel
 from app.schemas.search import SearchQuery
+from app.schemas.topic import OTHER_TOPIC_ID
 from app.tasks.celery_app import celery_app
 
 
@@ -78,6 +79,9 @@ async def _label(
             continue
 
         topic_id, confidence = wrapper.predict(text)
+        if topic_id == OTHER_TOPIC_ID:
+            # Document stays unlabelled
+            continue
         topic = topic_lookup.get(topic_id)
         if topic is None:
             # Predicted label that doesn't match any classifier topic — skip defensively

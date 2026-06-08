@@ -3,6 +3,13 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+# Reserved label for the BERTopic outlier cluster (-1). Used internally to train
+# the classifier to recognise documents that match no real topic, so it can avoid
+# forcing a label onto them. Never shown to the user, never added to a generated
+# topic, and never persisted to a document proxy.
+OTHER_TOPIC_ID = "__other__"
+
+
 class Topic(BaseModel):
     topic_id: str
     name: str

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 from app.config import settings
 from app.tasks.task_context import project_service_context, search_service_context
 from app.schemas.project import PendingPipeline
-from app.schemas.topic import GenerateTopicsResponse, Topic
+from app.schemas.topic import OTHER_TOPIC_ID, GenerateTopicsResponse, Topic
 from app.tasks.celery_app import celery_app
 
 
@@ -133,10 +133,12 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
     # BERTopic returns a list of topics ordered the same
     # way as input texts, so topic in position 1 corresponds to the
     # input text in position 1.
+    # The outlier cluster (-1) is kept too: its documents become the "Other"
+    # training set so the classifier can later avoid forcing labels onto docs
+    # that match no real topic.
     topic_doc_ids: dict[int, list[str]] = defaultdict(list)
     for idx, bert_topic_id in enumerate(topic_assignments):
-        if bert_topic_id != -1:
-            topic_doc_ids[bert_topic_id].append(filtered_doc_ids[idx])
+        topic_doc_ids[bert_topic_id].append(filtered_doc_ids[idx])
 
     generated_topics: list[Topic] = []
     topic_doc_ids_by_topic: dict[str, list[str]] = {}
@@ -153,6 +155,11 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
             )
         )
         topic_doc_ids_by_topic[topic_id] = topic_doc_ids.get(bert_topic_id, [])
+
+    # Stash the outlier docs under the reserved "Other" label.
+    outlier_doc_ids = topic_doc_ids.get(-1, [])
+    if outlier_doc_ids:
+        topic_doc_ids_by_topic[OTHER_TOPIC_ID] = outlier_doc_ids
 
     await _store_pending_pipeline(project_id, job_id, generated_topics, topic_doc_ids_by_topic)
     return GenerateTopicsResponse(topics=generated_topics).model_dump()

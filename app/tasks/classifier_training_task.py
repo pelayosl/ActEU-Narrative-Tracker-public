@@ -6,7 +6,7 @@ from app.config import settings
 from app.infrastructure.classifier_wrapper import ClassifierWrapper
 from app.tasks.task_context import project_service_context, search_service_context
 from app.schemas.classification import ClassifierMetadata
-from app.schemas.topic import Topic
+from app.schemas.topic import OTHER_TOPIC_ID, Topic
 from app.tasks.celery_app import celery_app
 
 
@@ -43,6 +43,11 @@ async def _run(topics: list[dict], project_id: str, name: str) -> dict:
 
         for doc_id in doc_ids:
             training_pairs.append((doc_id, topic.topic_id))
+
+    # Add the outlier docs as the reserved "Other" class so the classifier learns
+    # to recognise documents that match no real topic instead of forcing a label.
+    for doc_id in topic_mapping.get(OTHER_TOPIC_ID, []):
+        training_pairs.append((doc_id, OTHER_TOPIC_ID))
 
     if not training_pairs:
         raise ValueError("No training data found — topic mapping is empty or doc_ids are missing")
