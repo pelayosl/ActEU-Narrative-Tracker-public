@@ -2,28 +2,22 @@
 
 import * as React from "react";
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/stores/project-store";
 import type { Platform, SearchQuery } from "@/types/api";
-
-// The "Countries" facet shows country names but submits ISO language codes, because the
-// backend SearchQuery filters on `documents.language` (there is no country filter). The
-// dataset cannot reliably attribute country, so language is the geographic axis throughout.
-const COUNTRIES: { label: string; value: string }[] = [
-  { label: "Spain", value: "es" },
-  { label: "France", value: "fr" },
-  { label: "Germany", value: "de" },
-  { label: "Italy", value: "it" },
-  { label: "Poland", value: "pl" },
-  { label: "Netherlands", value: "nl" },
-  { label: "Sweden", value: "sv" },
-  { label: "Hungary", value: "hu" },
-  { label: "Portugal", value: "pt" },
-  { label: "Greece", value: "el" },
-];
 
 const PLATFORMS: { label: string; value: Platform }[] = [
   { label: "Twitter", value: "twitter" },
@@ -31,8 +25,8 @@ const PLATFORMS: { label: string; value: Platform }[] = [
   { label: "Online Media", value: "media" },
 ];
 
-// Core topics submit their stored label; project subtopics submit their topic_id (UUID).
-const TOPICS: { label: string; value: string }[] = [
+// ActEU core topics submit their stored label; project subtopics submit their topic_id (UUID).
+const ACTEU_TOPICS: { label: string; value: string }[] = [
   { label: "Immigration", value: "immigration" },
   { label: "Climate Change", value: "climate_change" },
   { label: "Gender Issues", value: "gender_issues" },
@@ -91,7 +85,7 @@ function Facet({
 
 export interface SearchFormProps {
   onSubmit: (query: SearchQuery) => void;
-  /** Reduced padding + no heading, for reuse inside the Apply Classifier / Label Custom Query dialogs. */
+  /** Reduced padding + no heading, for reuse inside Apply Classifier / Label Custom Query dialogs. */
   compact?: boolean;
   submitLabel?: string;
   loading?: boolean;
@@ -103,25 +97,51 @@ export function SearchForm({
   submitLabel = "Search",
   loading = false,
 }: SearchFormProps) {
+  const { data: session } = useSession();
   const activeProject = useProjectStore((s) => s.activeProject);
 
   const [keywords, setKeywords] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [countries, setCountries] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<string[]>([]);
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
   const [subtopics, setSubtopics] = useState<string[]>([]);
+  const [confidence, setConfidence] = useState(0); // 0 = no minimum (sent as null)
 
-  // Subtopics are the project's classifier topics (value = topic_id). The data model has no
-  // link from a subtopic back to a core topic, so they are not filtered by the selected topics.
+  // Languages are loaded from the DB so every option exists in at least one document.
+  const { data: availableLanguages = [] } = useQuery({
+    queryKey: ["languages"],
+    queryFn: () => api.listLanguages(session?.accessToken),
+    enabled: Boolean(session?.accessToken),
+    staleTime: Infinity,
+  });
+
+  const languageOptions = useMemo(() => {
+    let display: Intl.DisplayNames | null = null;
+    try {
+      display = new Intl.DisplayNames(["en"], { type: "language" });
+    } catch {
+      display = null;
+    }
+    return availableLanguages.map((code) => ({
+      value: code,
+      label: display?.of(code) ?? code,
+    }));
+  }, [availableLanguages]);
+
+  // Subtopics are the project's classifier topics (value = topic_id), sorted alphabetically.
   const subtopicOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const classifier of activeProject?.classifiers ?? []) {
       for (const topic of classifier.topics) seen.set(topic.topic_id, topic.name);
     }
-    return [...seen].map(([value, label]) => ({ value, label }));
+    return [...seen]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [activeProject]);
+
+  const unselectedSubtopics = subtopicOptions.filter((o) => !subtopics.includes(o.value));
 
   // ISO yyyy-mm-dd strings compare lexicographically, so a plain string compare is correct here.
   const dateInvalid = Boolean(dateFrom) && Boolean(dateTo) && dateFrom > dateTo;
@@ -141,10 +161,11 @@ export function SearchForm({
         .split(",")
         .map((k) => k.trim())
         .filter(Boolean),
-      languages: countries,
+      languages,
       platforms: platforms as Platform[],
       topics,
       subtopics,
+      confidence_threshold: confidence > 0 ? confidence : null,
       ...(dateFrom ? { date_from: `${dateFrom}T00:00:00` } : {}),
       ...(dateTo ? { date_to: `${dateTo}T23:59:59` } : {}),
     };
@@ -196,29 +217,88 @@ export function SearchForm({
         <p className="text-sm text-acteu-red">Start date cannot be later than end date.</p>
       )}
 
-      <Facet label="Countries" options={COUNTRIES} selected={countries} onToggle={toggle(setCountries)} />
+      {languageOptions.length > 0 && (
+        <Facet
+          label="Languages"
+          options={languageOptions}
+          selected={languages}
+          onToggle={toggle(setLanguages)}
+        />
+      )}
       <Facet label="Platforms" options={PLATFORMS} selected={platforms} onToggle={toggle(setPlatforms)} />
-      <Facet label="Topics" options={TOPICS} selected={topics} onToggle={toggle(setTopics)} />
+      <Facet label="ActEU topics" options={ACTEU_TOPICS} selected={topics} onToggle={toggle(setTopics)} />
 
       <div>
         <Label>Subtopics</Label>
-        {subtopicOptions.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {subtopicOptions.map((o) => (
-              <Pill
-                key={o.value}
-                active={subtopics.includes(o.value)}
-                onClick={() => toggle(setSubtopics)(o.value)}
+        <div className="flex flex-wrap items-center gap-2">
+          {subtopics.map((id) => {
+            const opt = subtopicOptions.find((o) => o.value === id);
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 rounded-md bg-acteu-red px-3 py-1 text-sm font-medium text-white"
               >
-                {o.label}
-              </Pill>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            No subtopics available — train a classifier in this project to create some.
-          </p>
-        )}
+                {opt?.label ?? id}
+                <button
+                  type="button"
+                  onClick={() => toggle(setSubtopics)(id)}
+                  aria-label={`Remove ${opt?.label ?? id}`}
+                  className="rounded-full hover:bg-white/20"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            );
+          })}
+
+          {subtopicOptions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No subtopics available — train a classifier in this project to create some.
+            </p>
+          ) : (
+            unselectedSubtopics.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Add subtopic"
+                    className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1 text-sm text-ink transition-colors hover:bg-bg"
+                  >
+                    <Plus className="h-4 w-4" /> Add
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-60 overflow-y-auto">
+                  {unselectedSubtopics.map((o) => (
+                    <DropdownMenuItem key={o.value} onSelect={() => toggle(setSubtopics)(o.value)}>
+                      {o.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )
+          )}
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="confidence">
+          Minimum confidence{confidence > 0 ? `: ${Math.round(confidence * 100)}%` : ""}
+        </Label>
+        <input
+          id="confidence"
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={confidence}
+          onChange={(e) => setConfidence(Number(e.target.value))}
+          className="w-full accent-acteu-red"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          {confidence > 0
+            ? "Only documents whose topic/subtopic confidence is at least this value."
+            : "No minimum — include all matches."}
+        </p>
       </div>
 
       <Button type="submit" size="lg" className="w-full" disabled={dateInvalid || loading}>
