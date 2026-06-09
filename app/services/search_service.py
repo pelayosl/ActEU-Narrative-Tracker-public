@@ -17,6 +17,10 @@ class SearchService:
     async def get_documents_by_ids(self, doc_ids: list[str]) -> list[dict]:
         return await self._document_repo.find_by_ids(doc_ids)
 
+    async def get_available_languages(self) -> list[str]:
+        """Languages present in the document collection"""
+        return await self._document_repo.distinct_languages()
+
     def _matched_subtopic_labels(self, doc: dict, query: SearchQuery) -> list[str]:
         """Document-level (ACTEU-native) subtopic labels carried by the doc that the query
         asked for, honouring the confidence threshold when set."""

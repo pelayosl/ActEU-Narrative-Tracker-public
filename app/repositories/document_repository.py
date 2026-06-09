@@ -84,6 +84,11 @@ class DocumentRepository:
         cursor = self._collection.find({"_id": {"$in": object_ids}})
         return [doc async for doc in cursor]
 
+    async def distinct_languages(self) -> list[str]:
+        """Every language value present in at least one document, sorted."""
+        languages = await self._collection.distinct("language")
+        return sorted(lang for lang in languages if lang)
+
     async def count(
         self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
     ) -> int:

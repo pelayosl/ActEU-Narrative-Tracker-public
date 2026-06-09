@@ -58,9 +58,16 @@ export const api = {
   deleteProject: (id: string, token?: string) =>
     request<void>(`/projects/${id}`, { method: "DELETE" }, token),
 
-  // Search
-  search: (query: SearchQuery) =>
-    request<SearchResult>("/search", { method: "POST", body: JSON.stringify(query) }),
+  // Search facets — languages present in at least one document (dynamic, like topics)
+  listLanguages: (token?: string) => request<string[]>("/search/languages", {}, token),
+
+  // Search — project_id is needed only so project-scoped subtopics can be resolved
+  search: (query: SearchQuery, token?: string, projectId?: string) =>
+    request<SearchResult>(
+      `/search/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
+      { method: "POST", body: JSON.stringify(query) },
+      token,
+    ),
 
   // Topic modelling (returns job_id, stream via SSE)
   generateTopics: (projectId: string, docIds: string[]) =>

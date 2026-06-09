@@ -14,12 +14,13 @@ export interface Topic {
 
 export interface SearchQuery {
   keywords: string[];
-  date_from: string;
-  date_to: string;
-  languages: string[]; // backend uses languages; UI labels them as countries
+  date_from?: string; // omitted = no lower bound (full collection)
+  date_to?: string; // omitted = no upper bound
+  languages: string[]; // backend uses languages
   platforms: Platform[];
   topics: string[];
   subtopics: string[];
+  confidence_threshold?: number | null;
 }
 
 export interface DocumentSummary {
@@ -27,7 +28,7 @@ export interface DocumentSummary {
   headline: string;
   excerpt: string;
   platform: Platform;
-  country: string;
+  language: string; // backend returns language
   date: string;
   relevant_topics: string[];
 }
