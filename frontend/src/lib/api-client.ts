@@ -1,7 +1,6 @@
 import type {
   AuthToken,
   Dashboard,
-  JobStatus,
   LabellingResult,
   Project,
   SearchQuery,
@@ -69,17 +68,19 @@ export const api = {
       token,
     ),
 
-  // Topic modelling (returns job_id, stream via SSE)
-  generateTopics: (projectId: string, docIds: string[]) =>
-    request<{ job_id: string }>("/topics/generate", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, doc_ids: docIds }),
-    }),
-  reconcileTopics: (projectId: string, topics: Topic[]) =>
-    request<{ job_id: string }>("/topics/reconcile", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, topics }),
-    }),
+  // Topic modelling (returns job_id, polled via getJobStatus)
+  generateTopics: (projectId: string, docIds: string[], token?: string) =>
+    request<{ job_id: string }>(
+      "/topics/generate",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, doc_ids: docIds }) },
+      token,
+    ),
+  reconcileTopics: (projectId: string, topics: Topic[], token?: string) =>
+    request<{ job_id: string }>(
+      "/topics/reconcile",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, topics }) },
+      token,
+    ),
 
   // Classification
   trainClassifier: (projectId: string, name: string, topics: Topic[]) =>
@@ -105,7 +106,4 @@ export const api = {
       body: JSON.stringify(query),
     }),
 
-  // Jobs
-  getJobStatus: (jobId: string) => request<JobStatus>(`/jobs/${jobId}`),
-  streamJob: (jobId: string) => new EventSource(`${BASE_URL}/jobs/${jobId}/stream`),
 };

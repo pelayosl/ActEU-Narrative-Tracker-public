@@ -54,21 +54,40 @@ def _extract_json(text: str) -> list[dict]:
     return json.loads(text)
 
 
+def _generation_ids(topic: Topic) -> list[str]:
+    """Generation-era UUIDs a topic resolves to in topic_mapping.
+
+    A manually merged topic carries its constituents' generation ids in
+    origin_topic_ids; a raw generated topic uses its own id. Reconciliation must
+    propagate these so merged topics keep mapping to their documents at train time.
+    """
+    return topic.origin_topic_ids if topic.origin_topic_ids else [topic.topic_id]
+
+
 def _build_topics(
     parsed: list[dict],
     valid_ids: set[str],
     originals: list[Topic],
 ) -> list[Topic]:
-    """Validate LLM output and ensure no input topic is lost."""
-    covered_ids: set[str] = set()
+    """Validate LLM output and ensure no input topic is lost.
+
+    The LLM groups by the surface topic_ids it was given, but origin_topic_ids on
+    the output must always be generation-era ids (the topic_mapping keys). We
+    therefore flatten each surface id back to its generation ids transitively.
+    """
+    by_id = {t.topic_id: t for t in originals}
+    covered_surface_ids: set[str] = set()
     result: list[Topic] = []
 
     for item in parsed:
-        # Filter out any IDs the LLM hallucinated
-        origin_ids = [oid for oid in item.get("origin_topic_ids", []) if oid in valid_ids]
-        if not origin_ids:
+        # Filter out any surface IDs the LLM hallucinated
+        surface_ids = [oid for oid in item.get("origin_topic_ids", []) if oid in valid_ids]
+        if not surface_ids:
             continue
-        covered_ids.update(origin_ids)
+        covered_surface_ids.update(surface_ids)
+        origin_ids: list[str] = []
+        for sid in surface_ids:
+            origin_ids.extend(_generation_ids(by_id[sid]))
         result.append(Topic(
             topic_id=str(uuid.uuid4()),
             name=item.get("name", "Unknown"),
@@ -78,12 +97,12 @@ def _build_topics(
 
     # Any topic the LLM dropped gets preserved as-is
     for topic in originals:
-        if topic.topic_id not in covered_ids:
+        if topic.topic_id not in covered_surface_ids:
             result.append(Topic(
                 topic_id=str(uuid.uuid4()),
                 name=topic.name,
                 description=topic.description,
-                origin_topic_ids=[topic.topic_id],
+                origin_topic_ids=_generation_ids(topic),
             ))
 
     return result
@@ -96,7 +115,7 @@ def _fallback(topics: list[Topic]) -> list[Topic]:
             topic_id=str(uuid.uuid4()),
             name=t.name,
             description=t.description,
-            origin_topic_ids=[t.topic_id],
+            origin_topic_ids=_generation_ids(t),
         )
         for t in topics
     ]

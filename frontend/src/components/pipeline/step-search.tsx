@@ -48,6 +48,8 @@ export function StepSearch() {
   const setSearchQuery = usePipelineStore((s) => s.setSearchQuery);
   const setSearchResult = usePipelineStore((s) => s.setSearchResult);
   const setStep = usePipelineStore((s) => s.setStep);
+  const setGenerationJobId = usePipelineStore((s) => s.setGenerationJobId);
+  const setTopicSubStep = usePipelineStore((s) => s.setTopicSubStep);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -60,6 +62,19 @@ export function StepSearch() {
       setSearchResult(data);
       setPage(0);
       setSelectedId(data.retrieved_docs[0]?.doc_id ?? null);
+    },
+  });
+
+  // Dispatch the BERTopic generation job, then move to step 2 in its loading state.
+  const generate = useMutation({
+    mutationFn: () => {
+      const docIds = (result?.retrieved_docs ?? []).map((d) => d.doc_id);
+      return api.generateTopics(activeProject!.project_id, docIds, session?.accessToken);
+    },
+    onSuccess: ({ job_id }) => {
+      setGenerationJobId(job_id);
+      setTopicSubStep("generating");
+      setStep("topics");
     },
   });
 
@@ -187,7 +202,9 @@ export function StepSearch() {
           )}
 
           {docs.length > 0 && (
-            <Button onClick={() => setStep("topics")}>Generate Topics →</Button>
+            <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
+              {generate.isPending ? "Starting…" : "Generate Topics →"}
+            </Button>
           )}
         </div>
       )}

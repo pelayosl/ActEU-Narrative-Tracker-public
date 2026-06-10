@@ -1,55 +1,245 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
+import { GitMerge } from "lucide-react";
 import { TopicCard } from "./topic-card";
 import { MergeDialog } from "./merge-dialog";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api-client";
+import { useJob } from "@/lib/use-job";
 import { usePipelineStore } from "@/stores/pipeline-store";
+import { useProjectStore } from "@/stores/project-store";
+import type { Topic } from "@/types/api";
 
-// TODO: handle sub-states (generating, generated, reconciling, reconciled) via topicSubStep.
-// 2b: list raw topics with edit/delete/checkbox-select, "Merge Selected", "Reconcile Topics", "Skip to Labelling".
-// 2c: reconciled topics with edit/delete (delete = split back), "Accept Topics", "Cancel".
+function generationIds(topic: Topic): string[] {
+  return topic.origin_topic_ids.length > 0 ? topic.origin_topic_ids : [topic.topic_id];
+}
+
+function ProgressBar({ progress, step, fallback }: { progress: number; step?: string; fallback: string }) {
+  return (
+    <div className="space-y-3">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-bg">
+        <div
+          className="h-full rounded-full bg-acteu-red transition-all duration-500"
+          style={{ width: `${Math.max(progress, 4)}%` }}
+        />
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {step || fallback} {progress > 0 && <span className="tabular-nums">· {progress}%</span>}
+      </p>
+    </div>
+  );
+}
+
 export function StepTopicModelling() {
+  const { data: session } = useSession();
+  const activeProject = useProjectStore((s) => s.activeProject);
+
   const generated = usePipelineStore((s) => s.generatedTopics);
   const reconciled = usePipelineStore((s) => s.reconciledTopics);
+  const preReconcile = usePipelineStore((s) => s.preReconcileTopics);
   const subStep = usePipelineStore((s) => s.topicSubStep);
-  const setStep = usePipelineStore((s) => s.setStep);
+  const generationJobId = usePipelineStore((s) => s.generationJobId);
+  const reconciliationJobId = usePipelineStore((s) => s.reconciliationJobId);
 
-  if (subStep === "generating" || subStep === "reconciling") {
-    return (
-      <div className="space-y-3">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-bg">
-          <div className="h-full w-1/3 animate-pulseRed bg-acteu-red" />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {subStep === "generating" ? "Running BERTopic… this may take a few minutes." : "Reconciling topics with LLM…"}
-        </p>
-      </div>
+  const setStep = usePipelineStore((s) => s.setStep);
+  const setTopicSubStep = usePipelineStore((s) => s.setTopicSubStep);
+  const setGeneratedTopics = usePipelineStore((s) => s.setGeneratedTopics);
+  const setReconciledTopics = usePipelineStore((s) => s.setReconciledTopics);
+  const setGenerationJobId = usePipelineStore((s) => s.setGenerationJobId);
+  const setReconciliationJobId = usePipelineStore((s) => s.setReconciliationJobId);
+  const updateGeneratedTopic = usePipelineStore((s) => s.updateGeneratedTopic);
+  const deleteGeneratedTopic = usePipelineStore((s) => s.deleteGeneratedTopic);
+  const mergeGeneratedTopics = usePipelineStore((s) => s.mergeGeneratedTopics);
+  const updateReconciledTopic = usePipelineStore((s) => s.updateReconciledTopic);
+  const splitReconciledTopic = usePipelineStore((s) => s.splitReconciledTopic);
+  const beginReconciliation = usePipelineStore((s) => s.beginReconciliation);
+  const cancelReconciliation = usePipelineStore((s) => s.cancelReconciliation);
+
+  const [selected, setSelected] = useState<string[]>([]);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const genJob = useJob(subStep === "generating" ? generationJobId : null);
+  const recJob = useJob(subStep === "reconciling" ? reconciliationJobId : null);
+
+  // Generation job completion
+  useEffect(() => {
+    if (subStep !== "generating" || !genJob) return;
+    if (genJob.status === "SUCCESS") {
+      const topics = (genJob.result.topics as Topic[]) ?? [];
+      setGeneratedTopics(topics);
+      setGenerationJobId(null);
+      setTopicSubStep("generated");
+    } else if (genJob.status === "FAILURE") {
+      setError("Topic generation failed. Please try again from the search step.");
+      setGenerationJobId(null);
+      setTopicSubStep("generated");
+    }
+  }, [genJob, subStep, setGeneratedTopics, setGenerationJobId, setTopicSubStep]);
+
+  // Reconciliation job completion
+  useEffect(() => {
+    if (subStep !== "reconciling" || !recJob) return;
+    if (recJob.status === "SUCCESS") {
+      const topics = (recJob.result.topics as Topic[]) ?? [];
+      setReconciledTopics(topics);
+      setReconciliationJobId(null);
+      setTopicSubStep("reconciled");
+    } else if (recJob.status === "FAILURE") {
+      setError("Reconciliation failed. Please try again.");
+      setReconciliationJobId(null);
+      setTopicSubStep("generated");
+    }
+  }, [recJob, subStep, setReconciledTopics, setReconciliationJobId, setTopicSubStep]);
+
+  // Map generation ids → constituent names, for the "Fuses:" label on reconciled cards.
+  const nameByGenerationId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of preReconcile) {
+      for (const id of generationIds(t)) map.set(id, t.name);
+    }
+    return map;
+  }, [preReconcile]);
+
+  function fusesLabel(topic: Topic): string | undefined {
+    if (topic.origin_topic_ids.length < 2) return undefined;
+    const names = [...new Set(topic.origin_topic_ids.map((id) => nameByGenerationId.get(id) ?? "?"))];
+    return names.join(" + ");
+  }
+
+  async function handleReconcile() {
+    if (!activeProject) return;
+    setError(null);
+    try {
+      const { job_id } = await api.reconcileTopics(
+        activeProject.project_id,
+        generated,
+        session?.accessToken,
+      );
+      beginReconciliation(job_id);
+    } catch {
+      setError("Could not start reconciliation. Please try again.");
+    }
+  }
+
+  function toggleSelect(topicId: string) {
+    setSelected((prev) =>
+      prev.includes(topicId) ? prev.filter((id) => id !== topicId) : [...prev, topicId],
     );
   }
 
-  const topics = subStep === "reconciled" ? reconciled : generated;
+  // --- Loading states (2a / start of 2c) ---
+  if (subStep === "generating") {
+    return (
+      <ProgressBar
+        progress={genJob?.progress ?? 0}
+        step={genJob?.result.step as string | undefined}
+        fallback="Running BERTopic… this may take a few minutes."
+      />
+    );
+  }
+  if (subStep === "reconciling") {
+    return (
+      <ProgressBar
+        progress={recJob?.progress ?? 0}
+        step={recJob?.result.step as string | undefined}
+        fallback="Reconciling topics with the LLM…"
+      />
+    );
+  }
+
+  const isReconciled = subStep === "reconciled";
+  const topics = isReconciled ? reconciled : generated;
+  const selectedTopics = generated.filter((t) => selected.includes(t.topic_id));
 
   return (
     <div className="space-y-4">
-      <ul className="space-y-2">
-        {topics.map((t) => (
-          <TopicCard key={t.topic_id} topic={t} reconciled={subStep === "reconciled"} />
-        ))}
-      </ul>
-      <div className="flex gap-2">
-        {subStep === "reconciled" ? (
-          <>
-            <Button onClick={() => setStep("label")}>Accept Topics</Button>
-            <Button variant="ghost">Cancel</Button>
-          </>
-        ) : (
-          <>
-            <Button>Reconcile Topics</Button>
-            <Button variant="outline" onClick={() => setStep("label")}>Skip to Labelling →</Button>
-          </>
-        )}
-      </div>
-      <MergeDialog />
+      {error && (
+        <div
+          role="alert"
+          className="flex items-center justify-between rounded-md border border-acteu-red/30 bg-acteu-red/5 p-3 text-sm text-acteu-red"
+        >
+          <span>{error}</span>
+          <button onClick={() => setError(null)} aria-label="Dismiss" className="font-medium">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {!isReconciled && (
+        <div className="rounded-md bg-bg px-3 py-2 text-sm text-ink">
+          <strong>{topics.length} topics</strong> generated from BERTopic analysis
+        </div>
+      )}
+
+      {topics.length === 0 ? (
+        <div className="rounded-md border border-border bg-white p-6 text-center text-sm text-muted-foreground">
+          No topics were generated. Try a broader search.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {topics.map((t, i) => (
+            <TopicCard
+              key={t.topic_id}
+              topic={t}
+              index={i + 1}
+              reconciled={isReconciled}
+              selected={selected.includes(t.topic_id)}
+              onToggleSelect={() => toggleSelect(t.topic_id)}
+              fusesLabel={isReconciled ? fusesLabel(t) : undefined}
+              onEdit={(name, description) =>
+                isReconciled
+                  ? updateReconciledTopic(t.topic_id, name, description)
+                  : updateGeneratedTopic(t.topic_id, name, description)
+              }
+              onDelete={() =>
+                isReconciled
+                  ? splitReconciledTopic(t.topic_id)
+                  : deleteGeneratedTopic(t.topic_id)
+              }
+            />
+          ))}
+        </ul>
+      )}
+
+      {isReconciled ? (
+        <div className="flex gap-2">
+          <Button onClick={() => setStep("label")}>Accept Topics</Button>
+          <Button variant="ghost" onClick={cancelReconciliation}>
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={selected.length < 2}
+            onClick={() => setMergeOpen(true)}
+          >
+            <GitMerge className="mr-1.5 h-4 w-4" />
+            Merge Selected ({selected.length})
+          </Button>
+          <div className="flex-1" />
+          <Button disabled={topics.length === 0} onClick={handleReconcile}>
+            Reconcile Topics
+          </Button>
+          <Button variant="outline" disabled={topics.length === 0} onClick={() => setStep("label")}>
+            Skip to Labelling →
+          </Button>
+        </div>
+      )}
+
+      <MergeDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        topics={selectedTopics}
+        onConfirm={(name, description) => {
+          mergeGeneratedTopics(selected, name, description);
+          setSelected([]);
+        }}
+      />
     </div>
   );
 }
