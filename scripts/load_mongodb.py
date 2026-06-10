@@ -92,7 +92,7 @@ CORE_TOPICS = [
     },
 ]
 
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_NAME = os.getenv("ADMIN_NAME", "Admin")
 ADMIN_SURNAME = os.getenv("ADMIN_SURNAME", "User")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")

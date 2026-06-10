@@ -55,6 +55,6 @@ class SearchService:
             excerpt=excerpt,
             platform=doc.get("platform") or "",
             language=doc.get("language") or "",
-            date=doc["published_time"],
+            date=doc.get("published_time"),
             relevant_topics=relevant_topics,
         )

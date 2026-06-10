@@ -169,7 +169,9 @@ export function StepSearch() {
                       <span className="uppercase text-muted-foreground">{selectedDoc.language}</span>
                       <span className="text-muted-foreground">·</span>
                       <span className="text-muted-foreground">
-                        {new Date(selectedDoc.date).toLocaleDateString()}
+                        {selectedDoc.date
+                          ? new Date(selectedDoc.date).toLocaleDateString()
+                          : "Unknown date"}
                       </span>
                     </div>
                     <h3 className="font-semibold text-ink">{selectedDoc.headline}</h3>

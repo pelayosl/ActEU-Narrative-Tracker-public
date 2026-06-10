@@ -37,7 +37,9 @@ export function DocumentCard({
         <PlatformBadge platform={doc.platform} />
         <span className="uppercase text-muted-foreground">{doc.language}</span>
         <span className="text-muted-foreground">·</span>
-        <span className="text-muted-foreground">{new Date(doc.date).toLocaleDateString()}</span>
+        <span className="text-muted-foreground">
+          {doc.date ? new Date(doc.date).toLocaleDateString() : "Unknown date"}
+        </span>
       </div>
       <h3 className="font-medium text-ink">{doc.headline}</h3>
       <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{doc.excerpt}</p>

@@ -29,7 +29,7 @@ export interface DocumentSummary {
   excerpt: string;
   platform: Platform;
   language: string; // backend returns language
-  date: string;
+  date: string | null; // some documents have no published_time
   relevant_topics: string[];
 }
 

@@ -20,7 +20,7 @@ class DocumentSummary(BaseModel):
     excerpt: str
     platform: str
     language: str
-    date: datetime
+    date: datetime | None = None
     relevant_topics: list[str] = []
 
 
