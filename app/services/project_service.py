@@ -181,7 +181,7 @@ class ProjectService:
                 name=topic.name,
                 description=topic.description,
                 classifier_id=classifier_id,
-                confidence=None,
+                confidence=1,
             )
             for doc_id in doc_ids_for_topic:
                 doc_to_labels.setdefault(doc_id, []).append(label)

@@ -164,8 +164,8 @@ class TestApplyPipelineLabelsHappyPath:
         project_repo.upsert_document_proxies.assert_awaited_once()
         project_repo.clear_pending_pipeline.assert_awaited_once_with("proj-1")
 
-    async def test_proxies_carry_none_confidence(self, service, project_repo):
-        """Phase 1 proxies are pure label assignment — no ML inference, confidence is None."""
+    async def test_proxies_carry_phase_1_confidence(self, service, project_repo):
+        """Phase 1 proxies are pure label assignment — no ML inference, confidence is assumed to be 1."""
         project_repo.find_pending_pipeline.return_value = make_pipeline(
             classifier_id="clf-1", topic_mapping={"t1": ["doc-a"]}
         )
@@ -176,7 +176,7 @@ class TestApplyPipelineLabelsHappyPath:
         await service.apply_pipeline_labels("proj-1", "clf-1")
 
         proxies = project_repo.upsert_document_proxies.await_args.args[1]
-        assert proxies[0].labels[0].confidence is None
+        assert proxies[0].labels[0].confidence == 1
         assert proxies[0].labels[0].classifier_id == "clf-1"
 
     async def test_reconciled_topic_resolves_via_origin_ids(self, service, project_repo):
