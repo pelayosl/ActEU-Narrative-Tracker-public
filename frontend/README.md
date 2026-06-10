@@ -14,7 +14,7 @@ src/
 │       ├── layout.tsx         Sidebar + header shell
 │       ├── pipeline/page.tsx  Pipeline (stepper + 3 steps)
 │       ├── projects/page.tsx  Project library
-│       └── visualizer/page.tsx
+│       └── visualiser/page.tsx
 ├── components/
 │   ├── providers.tsx          React Query provider
 │   ├── ui/                    shadcn primitives (Button so far)
@@ -22,7 +22,7 @@ src/
 │   ├── auth/                  LoginForm, RegisterDialog
 │   ├── projects/              List, SelectorDialog, ApplyClassifierDialog
 │   ├── pipeline/              Stepper + step components + form/cards/dialog
-│   └── visualizer/            QueryPanel + 4 panels
+│   └── visualiser/            QueryPanel + 4 panels
 ├── lib/
 │   ├── api-client.ts          Typed FastAPI client
 │   └── utils.ts               cn() helper
@@ -47,6 +47,6 @@ npm run dev
 5. Step 2 (sub-states + edit/merge/delete) → wire SSE for generation/reconciliation jobs.
 6. Step 3 (train + Phase 1/2 labelling).
 7. Project library (list, classifier actions, apply dialog).
-8. Visualizer (query panel + 4 panels with Recharts).
+8. Visualiser (query panel + 4 panels with Recharts).
 9. Validation rules and error banner system.
 ```

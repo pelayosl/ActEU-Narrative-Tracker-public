@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import type { DocumentSummary } from "@/types/api";
+import { PlatformBadge } from "./platform-badge";
 
 export function DocumentCard({
   doc,
@@ -12,9 +13,20 @@ export function DocumentCard({
   selected?: boolean;
   onClick?: () => void;
 }) {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!onClick) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
   return (
     <article
       onClick={onClick}
+      onKeyDown={handleKeyDown}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       className={cn(
         "rounded-md border bg-white p-4 transition-colors",
         onClick && "cursor-pointer hover:border-acteu-red/50",
@@ -22,7 +34,7 @@ export function DocumentCard({
       )}
     >
       <div className="mb-2 flex items-center gap-2 text-xs">
-        <span className="rounded bg-bg px-2 py-0.5 font-medium uppercase">{doc.platform}</span>
+        <PlatformBadge platform={doc.platform} />
         <span className="uppercase text-muted-foreground">{doc.language}</span>
         <span className="text-muted-foreground">·</span>
         <span className="text-muted-foreground">{new Date(doc.date).toLocaleDateString()}</span>
