@@ -1,6 +1,8 @@
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.search import DocumentSummary, SearchQuery, SearchResult
 
+EXCERPT_CHARS = 1500
+
 
 class SearchService:
     def __init__(self, document_repo: DocumentRepository) -> None:
@@ -40,8 +42,8 @@ class SearchService:
 
     def _to_summary(self, doc: dict, query: SearchQuery) -> DocumentSummary:
         plain_text = (doc.get("plain_text") or "").strip()
-        if len(plain_text) > 250:
-            excerpt = f"{plain_text[:250].rstrip()}..."
+        if len(plain_text) > EXCERPT_CHARS:
+            excerpt = f"{plain_text[:EXCERPT_CHARS].rstrip()}..."
         else:
             excerpt = plain_text
 

@@ -5,7 +5,7 @@ import pytest
 from bson import ObjectId
 
 from app.schemas.search import SearchQuery, SearchResult
-from app.services.search_service import SearchService
+from app.services.search_service import EXCERPT_CHARS, SearchService
 
 
 # ---------------------------------------------------------------------------
@@ -129,16 +129,16 @@ class TestToSummary:
         assert result.retrieved_docs[0].excerpt == "Short content."
 
     async def test_long_text_truncated_with_ellipsis(self, service, repo):
-        repo.find.return_value = [make_raw_doc(plain_text="A" * 300)]
+        repo.find.return_value = [make_raw_doc(plain_text="A" * (EXCERPT_CHARS + 50))]
         repo.count.return_value = 1
 
         result = await service.search(SearchQuery())
         excerpt = result.retrieved_docs[0].excerpt
         assert excerpt.endswith("...")
-        assert len(excerpt) <= 253
+        assert len(excerpt) <= EXCERPT_CHARS + 3
 
-    async def test_exactly_250_chars_not_truncated(self, service, repo):
-        text = "B" * 250
+    async def test_exactly_limit_chars_not_truncated(self, service, repo):
+        text = "B" * EXCERPT_CHARS
         repo.find.return_value = [make_raw_doc(plain_text=text)]
         repo.count.return_value = 1
 
@@ -146,13 +146,15 @@ class TestToSummary:
         assert result.retrieved_docs[0].excerpt == text
 
     async def test_truncation_rstrips_trailing_whitespace(self, service, repo):
-        repo.find.return_value = [make_raw_doc(plain_text="A" * 249 + " " + "B" * 100)]
+        # Last kept char (index EXCERPT_CHARS-1) is a space, so it gets rstripped
+        # before the ellipsis is appended.
+        text = "A" * (EXCERPT_CHARS - 1) + " " + "B" * 100
+        repo.find.return_value = [make_raw_doc(plain_text=text)]
         repo.count.return_value = 1
 
         result = await service.search(SearchQuery())
         excerpt = result.retrieved_docs[0].excerpt
-        # Position 249 is a space, gets rstripped before the ellipsis is appended.
-        assert excerpt == "A" * 249 + "..."
+        assert excerpt == "A" * (EXCERPT_CHARS - 1) + "..."
 
     async def test_plain_text_is_stripped(self, service, repo):
         repo.find.return_value = [make_raw_doc(plain_text="   hello   ")]
