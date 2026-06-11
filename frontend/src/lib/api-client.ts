@@ -83,21 +83,26 @@ export const api = {
     ),
 
   // Classification
-  trainClassifier: (projectId: string, name: string, topics: Topic[]) =>
-    request<{ job_id: string }>("/classification/train", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, name, topics }),
-    }),
-  applyPipelineLabels: (projectId: string, classifierId: string) =>
-    request<LabellingResult>("/classification/label/phase1", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, classifier_id: classifierId }),
-    }),
-  labelByQuery: (projectId: string, classifierId: string, query: SearchQuery) =>
-    request<{ job_id: string }>("/classification/label/phase2", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, classifier_id: classifierId, query }),
-    }),
+  trainClassifier: (projectId: string, name: string, topics: Topic[], token?: string) =>
+    request<{ job_id: string }>(
+      "/classification/train",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, name, topics }) },
+      token,
+    ),
+  // Phase 1 — synchronous: labels the retrieved docs from the pipeline's topic_mapping.
+  applyPipelineLabels: (projectId: string, classifierId: string, token?: string) =>
+    request<LabellingResult>(
+      "/classification/label/initial",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, classifier_id: classifierId }) },
+      token,
+    ),
+  // Phase 2 — async (returns job_id): classifier inference over a new query.
+  labelByQuery: (projectId: string, classifierId: string, query: SearchQuery, token?: string) =>
+    request<{ job_id: string }>(
+      "/classification/label",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, classifier_id: classifierId, query }) },
+      token,
+    ),
 
   // Visualisation
   loadDashboard: (query: VisualisationQuery) =>

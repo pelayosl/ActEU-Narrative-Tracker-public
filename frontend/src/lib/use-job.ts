@@ -10,6 +10,9 @@ export function useJob(jobId: string | null): JobStatus | null {
   const [status, setStatus] = useState<JobStatus | null>(null);
 
   useEffect(() => {
+    // Clear any status carried over from a previous job, so a stale terminal
+    // result is never reused when jobId changes (e.g. re-running reconciliation).
+    setStatus(null);
     if (!jobId) return;
 
     const es = new EventSource(`${BASE_URL}/jobs/${jobId}/stream`);

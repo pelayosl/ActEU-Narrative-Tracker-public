@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { GitMerge } from "lucide-react";
 import { TopicCard } from "./topic-card";
 import { MergeDialog } from "./merge-dialog";
+import { JobProgress } from "./job-progress";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api-client";
 import { useJob } from "@/lib/use-job";
@@ -14,22 +15,6 @@ import type { Topic } from "@/types/api";
 
 function generationIds(topic: Topic): string[] {
   return topic.origin_topic_ids.length > 0 ? topic.origin_topic_ids : [topic.topic_id];
-}
-
-function ProgressBar({ progress, step, fallback }: { progress: number; step?: string; fallback: string }) {
-  return (
-    <div className="space-y-3">
-      <div className="h-2 w-full overflow-hidden rounded-full bg-bg">
-        <div
-          className="h-full rounded-full bg-acteu-red transition-all duration-500"
-          style={{ width: `${Math.max(progress, 4)}%` }}
-        />
-      </div>
-      <p className="text-sm text-muted-foreground">
-        {step || fallback} {progress > 0 && <span className="tabular-nums">· {progress}%</span>}
-      </p>
-    </div>
-  );
 }
 
 export function StepTopicModelling() {
@@ -133,7 +118,7 @@ export function StepTopicModelling() {
   // --- Loading states (2a / start of 2c) ---
   if (subStep === "generating") {
     return (
-      <ProgressBar
+      <JobProgress
         progress={genJob?.progress ?? 0}
         step={genJob?.result.step as string | undefined}
         fallback="Running BERTopic… this may take a few minutes."
@@ -142,7 +127,7 @@ export function StepTopicModelling() {
   }
   if (subStep === "reconciling") {
     return (
-      <ProgressBar
+      <JobProgress
         progress={recJob?.progress ?? 0}
         step={recJob?.result.step as string | undefined}
         fallback="Reconciling topics with the LLM…"

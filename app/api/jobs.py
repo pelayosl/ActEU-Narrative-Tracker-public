@@ -14,8 +14,7 @@ async def stream_job(
     job_id: str,
     job_queue: Annotated[JobQueueService, Depends(get_job_queue)],
 ) -> EventSourceResponse:
-    """SSE stream for job progress. No auth — the job_id UUID is unguessable and
-    acts as the access token, matching the pattern used by the frontend EventSource."""
+    """SSE stream for job progress."""
     async def event_generator():
         async for job_status in job_queue.stream_progress(job_id):
             yield {"data": job_status.model_dump_json()}

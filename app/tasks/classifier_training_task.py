@@ -14,8 +14,7 @@ from app.tasks.celery_app import celery_app
 def classifier_training_task(
     topics: list[dict], project_id: str, name: str
 ) -> dict:
-    """Train a FastText classifier on the validated topics.
-    Depends on: ClassifierWrapper, SearchService (fetch texts), ProjectService (save classifier)."""
+    """Train a FastText classifier on the validated topics."""
     return asyncio.run(_run(topics, project_id, name))
 
 
@@ -27,7 +26,7 @@ async def _run(topics: list[dict], project_id: str, name: str) -> dict:
         pipeline = await project_service.get_pending_pipeline(project_id)
 
     if pipeline is None:
-        raise ValueError("No pending pipeline found — topic generation must run first")
+        raise ValueError("No pending pipeline found. Topic generation must run first")
 
     topic_mapping = pipeline.topic_mapping
 

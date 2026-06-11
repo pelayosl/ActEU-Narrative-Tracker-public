@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { ClassifierMetadata, SearchQuery, SearchResult, Topic } from "@/types/api";
+import type {
+  ClassifierMetadata,
+  LabellingResult,
+  SearchQuery,
+  SearchResult,
+  Topic,
+} from "@/types/api";
 
 export type PipelineStep = "search" | "topics" | "label";
 export type TopicSubStep = "generating" | "generated" | "reconciling" | "reconciled";
@@ -25,6 +31,10 @@ interface PipelineState {
   generationJobId: string | null;
   reconciliationJobId: string | null;
   trainedClassifier: ClassifierMetadata | null;
+  // Labelling results, kept here so they survive re-renders and a phase-1 result
+  // can't be re-triggered after the backend clears the pending pipeline.
+  phase1Result: LabellingResult | null;
+  phase2Result: LabellingResult | null;
 
   setStep: (step: PipelineStep) => void;
   setTopicSubStep: (s: TopicSubStep | null) => void;
@@ -35,6 +45,8 @@ interface PipelineState {
   setGenerationJobId: (id: string | null) => void;
   setReconciliationJobId: (id: string | null) => void;
   setTrainedClassifier: (c: ClassifierMetadata) => void;
+  setPhase1Result: (r: LabellingResult) => void;
+  setPhase2Result: (r: LabellingResult) => void;
 
   // 2b — raw topic editing (frontend only, never written back to the backend
   // until reconciliation or training is triggered with the current list).
@@ -63,6 +75,8 @@ const initial = {
   generationJobId: null,
   reconciliationJobId: null,
   trainedClassifier: null,
+  phase1Result: null,
+  phase2Result: null,
 };
 
 export const usePipelineStore = create<PipelineState>((set) => ({
@@ -76,6 +90,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   setGenerationJobId: (id) => set({ generationJobId: id }),
   setReconciliationJobId: (id) => set({ reconciliationJobId: id }),
   setTrainedClassifier: (c) => set({ trainedClassifier: c }),
+  setPhase1Result: (r) => set({ phase1Result: r }),
+  setPhase2Result: (r) => set({ phase2Result: r }),
 
   updateGeneratedTopic: (topicId, name, description) =>
     set((s) => ({
