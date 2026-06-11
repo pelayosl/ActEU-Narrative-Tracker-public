@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.search import DocumentSummary, SearchQuery, SearchResult
 
@@ -51,12 +53,17 @@ class SearchService:
         relevant_topics = [acteu_topic["label"]] if acteu_topic.get("label") else []
         relevant_topics += self._matched_subtopic_labels(doc, query)
 
+        # published_time should be a BSON Date (use loader to convert dates to BSON), but a
+        # few records may carry an unparseable legacy string. Ignore and fix manually if detected.
+        published_time = doc.get("published_time")
+        date = published_time if isinstance(published_time, datetime) else None
+
         return DocumentSummary(
             doc_id=str(doc["_id"]),
             headline=doc.get("headline") or "",
             excerpt=excerpt,
             platform=doc.get("platform") or "",
             language=doc.get("language") or "",
-            date=doc.get("published_time"),
+            date=date,
             relevant_topics=relevant_topics,
         )
