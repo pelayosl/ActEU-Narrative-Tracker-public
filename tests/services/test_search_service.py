@@ -120,6 +120,33 @@ class TestToSummary:
         assert summary.headline == "My headline"
         assert summary.platform == "telegram"
         assert summary.language == "de"
+        assert summary.date == datetime(2024, 3, 1, tzinfo=timezone.utc)
+
+    async def test_datetime_published_time_preserved(self, service, repo):
+        when = datetime(2023, 9, 8, 14, 8, 16, tzinfo=timezone.utc)
+        repo.find.return_value = [make_raw_doc(published_time=when)]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery())
+        assert result.retrieved_docs[0].date == when
+
+    async def test_unparseable_string_published_time_becomes_none(self, service, repo):
+        # Legacy/malformed value the loader/migration could not convert to a Date
+        # (Spanish locale). Must not fail the whole batch — date falls back to None.
+        repo.find.return_value = [make_raw_doc(published_time="vie, 08 sep 2023 14:08:16 +0200")]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery())
+        assert result.retrieved_docs[0].date is None
+
+    async def test_missing_published_time_yields_none_date(self, service, repo):
+        doc = make_raw_doc()
+        doc.pop("published_time", None)
+        repo.find.return_value = [doc]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery())
+        assert result.retrieved_docs[0].date is None
 
     async def test_short_text_returned_verbatim(self, service, repo):
         repo.find.return_value = [make_raw_doc(plain_text="Short content.")]

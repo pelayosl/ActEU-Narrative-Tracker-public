@@ -1,15 +1,15 @@
 "use client";
 
-import { QueryPanel } from "@/components/visualizer/query-panel";
-import { TopicEvolutionChart } from "@/components/visualizer/topic-evolution-chart";
-import { CountryBreakdown } from "@/components/visualizer/country-breakdown";
-import { ActorsTable } from "@/components/visualizer/actors-table";
-import { DocumentsList } from "@/components/visualizer/documents-list";
+import { QueryPanel } from "@/components/visualiser/query-panel";
+import { TopicEvolutionChart } from "@/components/visualiser/topic-evolution-chart";
+import { CountryBreakdown } from "@/components/visualiser/country-breakdown";
+import { ActorsTable } from "@/components/visualiser/actors-table";
+import { DocumentsList } from "@/components/visualiser/documents-list";
 import { ProjectSelectorDialog } from "@/components/projects/project-selector-dialog";
 import { useProjectStore } from "@/stores/project-store";
 import { useState } from "react";
 
-export default function VisualizerPage() {
+export default function VisualiserPage() {
   const activeProject = useProjectStore((s) => s.activeProject);
   const [loaded, setLoaded] = useState(false);
 

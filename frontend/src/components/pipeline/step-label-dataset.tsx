@@ -15,6 +15,7 @@ import { api } from "@/lib/api-client";
 import { useJob } from "@/lib/use-job";
 import { usePipelineStore } from "@/stores/pipeline-store";
 import { useProjectStore } from "@/stores/project-store";
+import { buildVisualiserPrefill, useVisualiserStore } from "@/stores/visualiser-store";
 import type { ClassifierMetadata, LabellingResult, SearchQuery, Topic } from "@/types/api";
 
 export function StepLabelDataset() {
@@ -23,6 +24,7 @@ export function StepLabelDataset() {
   const activeProject = useProjectStore((s) => s.activeProject);
 
   const searchResult = usePipelineStore((s) => s.searchResult);
+  const searchQuery = usePipelineStore((s) => s.searchQuery);
   const generatedTopics = usePipelineStore((s) => s.generatedTopics);
   const reconciledTopics = usePipelineStore((s) => s.reconciledTopics);
   const trainedClassifier = usePipelineStore((s) => s.trainedClassifier);
@@ -31,10 +33,14 @@ export function StepLabelDataset() {
   const phase2Result = usePipelineStore((s) => s.phase2Result);
   const setPhase1Result = usePipelineStore((s) => s.setPhase1Result);
   const setPhase2Result = usePipelineStore((s) => s.setPhase2Result);
+  const resumedDocCount = usePipelineStore((s) => s.resumedDocCount);
+  const setPrefill = useVisualiserStore((s) => s.setPrefill);
 
   // Train on the reconciled topics if reconciliation ran, otherwise the raw list.
   const topics: Topic[] = reconciledTopics.length > 0 ? reconciledTopics : generatedTopics;
-  const docCount = searchResult?.retrieved_docs.length ?? 0;
+  // On a resumed pipeline the original searchResult is gone — fall back to the
+  // document count derived from the topic_mapping.
+  const docCount = searchResult?.retrieved_docs.length ?? resumedDocCount ?? 0;
 
   const [selected, setSelected] = useState<string[]>(() => topics.map((t) => t.topic_id));
   const [name, setName] = useState("");
@@ -308,11 +314,16 @@ export function StepLabelDataset() {
           <section className="rounded-lg border border-acteu-red/30 bg-acteu-red/5 p-6">
             <h3 className="mb-1 font-semibold text-ink">Pipeline Complete</h3>
             <p className="mb-4 text-sm text-muted-foreground">
-              Ready to explore your results? Head to the Visualizer to analyse topic evolution,
+              Ready to explore your results? Head to the Visualiser to analyse topic evolution,
               compare languages and platforms, and discover key entities.
             </p>
-            <Button onClick={() => router.push("/visualizer")}>
-              Go to Visualizer <ArrowRight className="ml-1.5 h-4 w-4" />
+            <Button
+              onClick={() => {
+                setPrefill(buildVisualiserPrefill(searchQuery, trainedClassifier));
+                router.push("/visualiser");
+              }}
+            >
+              Go to Visualiser <ArrowRight className="ml-1.5 h-4 w-4" />
             </Button>
           </section>
         </>

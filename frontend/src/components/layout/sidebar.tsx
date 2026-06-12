@@ -9,7 +9,7 @@ import { ProfileMenu } from "./profile-menu";
 const items = [
   { href: "/pipeline", label: "Pipeline", icon: LayoutGrid },
   { href: "/projects", label: "Project Library", icon: FolderKanban },
-  { href: "/visualizer", label: "Visualizer", icon: BarChart3 },
+  { href: "/visualiser", label: "Visualiser", icon: BarChart3 },
 ];
 
 export function Sidebar() {

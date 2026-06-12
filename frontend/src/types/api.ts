@@ -65,6 +65,7 @@ export interface PendingPipeline {
   reconciled_topics: Topic[];
   topic_mapping: Record<string, string[]>;
   created_at: string;
+  classifier_id: string | null; // stamped once a classifier has been trained
 }
 
 export interface Project {

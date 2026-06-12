@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   ClassifierMetadata,
   LabellingResult,
+  Project,
   SearchQuery,
   SearchResult,
   Topic,
@@ -35,6 +36,10 @@ interface PipelineState {
   // can't be re-triggered after the backend clears the pending pipeline.
   phase1Result: LabellingResult | null;
   phase2Result: LabellingResult | null;
+  // Resumption: which project the store was last hydrated for, and the document
+  // count derived from a resumed topic_mapping (searchResult is not persisted).
+  hydratedProjectId: string | null;
+  resumedDocCount: number | null;
 
   setStep: (step: PipelineStep) => void;
   setTopicSubStep: (s: TopicSubStep | null) => void;
@@ -61,6 +66,9 @@ interface PipelineState {
 
   beginReconciliation: (jobId: string) => void;
   cancelReconciliation: () => void;
+  // Restore pipeline state from a project's pending_pipeline when entering the
+  // pipeline. Idempotent per project (guarded by hydratedProjectId).
+  hydrateFromProject: (project: Project) => void;
   reset: () => void;
 }
 
@@ -77,7 +85,19 @@ const initial = {
   trainedClassifier: null,
   phase1Result: null,
   phase2Result: null,
+  hydratedProjectId: null,
+  resumedDocCount: null,
 };
+
+// Count unique doc ids across a topic_mapping (used to show the document count
+// when a pipeline is resumed and the original searchResult is no longer in memory).
+function countMappedDocs(topicMapping: Record<string, string[]>): number {
+  const ids = new Set<string>();
+  for (const docIds of Object.values(topicMapping)) {
+    for (const id of docIds) ids.add(id);
+  }
+  return ids.size;
+}
 
 export const usePipelineStore = create<PipelineState>((set) => ({
   ...initial,
@@ -153,6 +173,47 @@ export const usePipelineStore = create<PipelineState>((set) => ({
 
   cancelReconciliation: () =>
     set({ reconciledTopics: [], reconciliationJobId: null, topicSubStep: "generated" }),
+
+  hydrateFromProject: (project) =>
+    set((s) => {
+      // Already hydrated for this project — keep any live working state.
+      if (s.hydratedProjectId === project.project_id) return {};
+
+      const pp = project.pending_pipeline;
+      // No pending pipeline → fresh start at the search step.
+      if (!pp) {
+        return { ...initial, hydratedProjectId: project.project_id };
+      }
+
+      const base = {
+        ...initial,
+        hydratedProjectId: project.project_id,
+        generatedTopics: pp.generated_topics,
+        reconciledTopics: pp.reconciled_topics,
+        preReconcileTopics: pp.generated_topics,
+        generationJobId: pp.generation_job_id || null,
+      };
+
+      // Training already ran (classifier stamped) → resume at the labelling step.
+      const classifier = pp.classifier_id
+        ? project.classifiers.find((c) => c.classifier_id === pp.classifier_id) ?? null
+        : null;
+      if (classifier) {
+        return {
+          ...base,
+          currentStep: "label" as PipelineStep,
+          trainedClassifier: classifier,
+          resumedDocCount: countMappedDocs(pp.topic_mapping),
+        };
+      }
+
+      // Reconciliation done → step 2c, otherwise the raw topic list (2b).
+      return {
+        ...base,
+        currentStep: "topics" as PipelineStep,
+        topicSubStep: pp.reconciled_topics.length > 0 ? "reconciled" : "generated",
+      };
+    }),
 
   reset: () => set(initial),
 }));
