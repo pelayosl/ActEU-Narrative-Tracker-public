@@ -196,12 +196,12 @@ class TestTopEntities:
         # scores are floats and present
         assert all(isinstance(e.score, float) for e in topic_entities.entities)
 
-    async def test_caps_at_five_entities(self, service, document_repo):
+    async def test_caps_at_ten_entities(self, service, document_repo):
         document_repo.entities_for_topic.return_value = [
-            ["A", "B", "C", "D", "E", "F", "G"],
+            ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"],
         ]
         result = await service.load_dashboard(make_query(topics=["immigration"]))
-        assert len(result.top_entities[0].entities) == 5
+        assert len(result.top_entities[0].entities) == 10
 
     async def test_empty_entities_yields_empty_list(self, service, document_repo):
         document_repo.entities_for_topic.return_value = []

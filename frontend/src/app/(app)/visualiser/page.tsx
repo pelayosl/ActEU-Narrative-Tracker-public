@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { QueryPanel } from "@/components/visualiser/query-panel";
 import { TopicEvolutionChart } from "@/components/visualiser/topic-evolution-chart";
 import { LanguageBreakdown } from "@/components/visualiser/language-breakdown";
+import { TopEntities } from "@/components/visualiser/top-entities";
 import { ProjectSelectorDialog } from "@/components/projects/project-selector-dialog";
 import { TOPIC_COLORS, type TopicSeriesMeta } from "@/components/visualiser/topic-colors";
 import { api } from "@/lib/api-client";
@@ -69,6 +70,7 @@ export default function VisualiserPage() {
           <>
             <TopicEvolutionChart data={dashboard.topic_evolution} topics={topicMeta} />
             <LanguageBreakdown data={dashboard.topics_by_language} topics={topicMeta} />
+            <TopEntities data={dashboard.top_entities} topics={topicMeta} />
           </>
         )}
       </div>

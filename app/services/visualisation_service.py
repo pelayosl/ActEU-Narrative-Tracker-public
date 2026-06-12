@@ -15,7 +15,7 @@ from app.schemas.visualisation import (
 from app.services.pagerank import top_entities
 from app.services.project_service import ProjectService
 
-TOP_ENTITIES_LIMIT = 5
+TOP_ENTITIES_LIMIT = 10
 RELEVANT_DOCUMENTS_LIMIT = 10
 EXCERPT_MAX_CHARS = 250
 
