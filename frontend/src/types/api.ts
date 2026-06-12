@@ -85,25 +85,67 @@ export interface LabellingResult {
 }
 
 export interface VisualisationQuery {
-  topics: string[];
+  topics: string[]; // core label (e.g. "gender_issues") or project subtopic topic_id (UUID)
   date_from: string;
   date_to: string;
-  countries: string[];
+  languages: string[];
   platforms: Platform[];
 }
 
-export interface Actor {
-  name: string;
-  sentiment: Sentiment;
-  document_count: number;
+// Each series/breakdown's `topic` field is the identifier submitted in the query
+// (core label or subtopic UUID); the UI maps it back to a display name.
+export interface TimePoint {
+  date: string; // "YYYY-MM-DD"
+  count: number;
+}
+export interface TopicTimeSeries {
+  topic: string;
+  series: TimePoint[];
+}
+
+export interface LanguageCount {
+  language: string;
+  count: number;
+}
+export interface TopicLanguageBreakdown {
+  topic: string;
+  counts: LanguageCount[];
+}
+
+export interface PlatformCount {
+  platform: string;
+  count: number;
+}
+export interface TopicPlatformBreakdown {
+  topic: string;
+  counts: PlatformCount[];
+}
+
+export interface EntityScore {
+  entity: string;
+  score: number;
+}
+export interface TopicEntities {
+  topic: string;
+  entities: EntityScore[];
+}
+
+export interface DocumentPreview {
+  doc_id: string;
+  platform: string;
+  language: string;
+  date: string;
+  topic: string;
+  relevance_score: number;
+  excerpt: string;
 }
 
 export interface Dashboard {
-  topic_evolution: Array<Record<string, number | string>>;
-  topics_by_country: Array<Record<string, number | string>>;
-  topics_by_platform: Array<Record<string, number | string>>;
-  top_actors: Actor[];
-  relevant_documents: DocumentSummary[];
+  topic_evolution: TopicTimeSeries[];
+  topics_by_language: TopicLanguageBreakdown[];
+  topics_by_platform: TopicPlatformBreakdown[];
+  top_entities: TopicEntities[];
+  relevant_documents: DocumentPreview[];
 }
 
 export interface JobStatus {

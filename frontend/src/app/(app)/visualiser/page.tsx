@@ -1,17 +1,42 @@
 "use client";
 
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { QueryPanel } from "@/components/visualiser/query-panel";
 import { TopicEvolutionChart } from "@/components/visualiser/topic-evolution-chart";
-import { CountryBreakdown } from "@/components/visualiser/country-breakdown";
-import { ActorsTable } from "@/components/visualiser/actors-table";
-import { DocumentsList } from "@/components/visualiser/documents-list";
+import { LanguageBreakdown } from "@/components/visualiser/language-breakdown";
 import { ProjectSelectorDialog } from "@/components/projects/project-selector-dialog";
+import { TOPIC_COLORS, type TopicSeriesMeta } from "@/components/visualiser/topic-colors";
+import { api } from "@/lib/api-client";
 import { useProjectStore } from "@/stores/project-store";
-import { useState } from "react";
+import type { Dashboard, VisualisationQuery } from "@/types/api";
 
 export default function VisualiserPage() {
+  const { data: session } = useSession();
   const activeProject = useProjectStore((s) => s.activeProject);
-  const [loaded, setLoaded] = useState(false);
+
+  // Topic metadata (value → label + colour) for the query just loaded, so charts
+  // render consistent legends/colours regardless of the order the backend returns.
+  const [topicMeta, setTopicMeta] = useState<TopicSeriesMeta[]>([]);
+
+  const load = useMutation({
+    mutationFn: (vars: { query: VisualisationQuery; topicLabels: Record<string, string> }) =>
+      api.loadDashboard(vars.query, activeProject?.project_id, session?.accessToken),
+  });
+
+  function handleLoad(query: VisualisationQuery, topicLabels: Record<string, string>) {
+    setTopicMeta(
+      query.topics.map((value, i) => ({
+        value,
+        label: topicLabels[value] ?? value,
+        color: TOPIC_COLORS[i % TOPIC_COLORS.length],
+      })),
+    );
+    load.mutate({ query, topicLabels });
+  }
+
+  const dashboard: Dashboard | undefined = load.data;
 
   if (!activeProject) {
     return <ProjectSelectorDialog />;
@@ -19,18 +44,31 @@ export default function VisualiserPage() {
 
   return (
     <div className="grid grid-cols-[320px_1fr] gap-6">
-      <QueryPanel onLoad={() => setLoaded(true)} />
+      <QueryPanel onLoad={handleLoad} loading={load.isPending} />
+
       <div className="space-y-6">
-        {!loaded ? (
+        {load.isError && (
+          <div role="alert" className="rounded-md border border-acteu-red/30 bg-acteu-red/5 p-3 text-sm text-acteu-red">
+            Could not load the visualisation. Please try again.
+          </div>
+        )}
+
+        {!dashboard && !load.isPending && !load.isError && (
           <div className="rounded-lg border border-border bg-white p-12 text-center text-muted-foreground">
             Select at least one topic and a timespan to begin.
           </div>
-        ) : (
+        )}
+
+        {load.isPending && (
+          <div className="rounded-lg border border-border bg-white p-12 text-center text-muted-foreground">
+            Loading visualisation…
+          </div>
+        )}
+
+        {dashboard && !load.isPending && (
           <>
-            <TopicEvolutionChart />
-            <CountryBreakdown />
-            <ActorsTable />
-            <DocumentsList />
+            <TopicEvolutionChart data={dashboard.topic_evolution} topics={topicMeta} />
+            <LanguageBreakdown data={dashboard.topics_by_language} topics={topicMeta} />
           </>
         )}
       </div>

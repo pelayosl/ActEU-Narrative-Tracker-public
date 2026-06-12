@@ -104,11 +104,11 @@ export const api = {
       token,
     ),
 
-  // Visualisation
-  loadDashboard: (query: VisualisationQuery) =>
-    request<Dashboard>("/visualisation/dashboard", {
-      method: "POST",
-      body: JSON.stringify(query),
-    }),
-
+  // Visualisation — project_id scopes subtopic resolution to the project's proxies.
+  loadDashboard: (query: VisualisationQuery, projectId?: string, token?: string) =>
+    request<Dashboard>(
+      `/visualisation/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
+      { method: "POST", body: JSON.stringify(query) },
+      token,
+    ),
 };
