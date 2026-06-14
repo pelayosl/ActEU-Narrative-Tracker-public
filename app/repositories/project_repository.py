@@ -91,13 +91,16 @@ class ProjectRepository:
                 result[proxy["doc_id"]] = matching_names
         return result
 
-    async def find_proxy_doc_ids_by_topics(
+    async def find_proxy_confidence_by_topics(
         self,
         project_id: str,
         topics: list[str],
-    ) -> dict[str, list[str]]:
-        """Maps each requested topic_id to the list of doc_ids whose project proxies carry a
-        label for it. Topics with no proxy matches are omitted from the result."""
+    ) -> dict[str, dict[str, float]]:
+        """Maps each requested topic_id to a {doc_id: confidence} map drawn from the
+        project's document proxies. A topic_id appears at most once per proxy (it is a
+        unique UUID, and labelling guards against duplicate (topic_id, classifier_id)
+        labels), so each doc contributes a single confidence. Topics with no proxy
+        matches are omitted from the result."""
         doc = await self._collection.find_one(
             {"project_id": project_id},
             {"document_proxies": 1},
@@ -105,12 +108,14 @@ class ProjectRepository:
         if not doc:
             return {}
         topics_set = set(topics)
-        result: dict[str, list[str]] = {}
+        result: dict[str, dict[str, float]] = {}
         for proxy in doc.get("document_proxies", []):
             for label in proxy.get("labels", []):
                 topic_id = label.get("topic_id")
-                if topic_id in topics_set:
-                    result.setdefault(topic_id, []).append(proxy["doc_id"])
+                confidence = label.get("confidence")
+                if topic_id not in topics_set or confidence is None:
+                    continue
+                result.setdefault(topic_id, {})[proxy["doc_id"]] = confidence
         return result
 
     async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:

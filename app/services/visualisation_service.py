@@ -16,7 +16,6 @@ from app.services.pagerank import top_entities
 from app.services.project_service import ProjectService
 
 TOP_ENTITIES_LIMIT = 10
-RELEVANT_DOCUMENTS_LIMIT = 10
 EXCERPT_MAX_CHARS = 250
 
 
@@ -32,13 +31,15 @@ class VisualisationService:
     async def load_dashboard(
         self, query: VisualisationQuery, project_id: str | None = None
     ) -> Dashboard:
-        proxy_doc_ids = await self._resolve_proxy_doc_ids(query.topics, project_id)
+        proxy_confidence = await self._resolve_proxy_confidence(query.topics, project_id)
+        # The count/entity blocks only need the matched doc_ids per topic.
+        proxy_doc_ids = {topic: list(conf) for topic, conf in proxy_confidence.items()}
 
         topic_evolution = await self._topic_evolution(query, proxy_doc_ids)
         topics_by_language = await self._topics_by_language(query, proxy_doc_ids)
         topics_by_platform = await self._topics_by_platform(query, proxy_doc_ids)
         top_entities_by_topic = await self._top_entities(query, proxy_doc_ids)
-        relevant_documents = await self._relevant_documents(query, proxy_doc_ids)
+        relevant_documents = await self._relevant_documents(query, proxy_confidence)
 
         return Dashboard(
             topic_evolution=topic_evolution,
@@ -48,14 +49,14 @@ class VisualisationService:
             relevant_documents=relevant_documents,
         )
 
-    async def _resolve_proxy_doc_ids(
+    async def _resolve_proxy_confidence(
         self, topics: list[str], project_id: str | None
-    ) -> dict[str, list[str]]:
-        """Resolve, per topic, the project proxy doc_ids that carry it. Returns an empty
-        mapping when no project scope is supplied."""
+    ) -> dict[str, dict[str, float]]:
+        """Resolve, per topic, the project proxy {doc_id: confidence} map. Returns an
+        empty mapping when no project scope is supplied."""
         if not project_id:
             return {}
-        return await self._project_service.get_proxy_doc_ids_by_topics(project_id, topics)
+        return await self._project_service.get_proxy_confidence_by_topics(project_id, topics)
 
     async def _topic_evolution(
         self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
@@ -151,12 +152,36 @@ class VisualisationService:
         return results
 
     async def _relevant_documents(
-        self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
+        self, query: VisualisationQuery, proxy_confidence: dict[str, dict[str, float]]
     ) -> list[DocumentPreview]:
-        """Single merged list across all query topics: each document's relevance is the
-        highest confidence it has for any matched query topic. Deduplicated by document,
-        sorted by relevance descending, capped at RELEVANT_DOCUMENTS_LIMIT."""
-        best: dict[str, dict] = {}
+        """Sample up to `query.sample_size` documents across all query topics. Each
+        topic gets a number of slots proportional to its mean classifier confidence
+        (minimum 1 each) and shows its own highest-confidence documents. A document
+        representative of several query topics may appear once under each of them (so a
+        narrow topic that overlaps a broader one still gets its own examples). Slots a
+        sparse topic cannot fill are redistributed to the remaining documents of other
+        topics, so the sample reaches `sample_size` whenever enough documents exist.
+        The result is sorted by relevance descending."""
+        if not query.topics:
+            return []
+
+        weights: dict[str, float] = {}
+        for topic in query.topics:
+            mean = await self._document_repo.mean_topic_confidence(
+                topic,
+                query.date_from,
+                query.date_to,
+                query.languages,
+                query.platforms,
+                proxy_confidence.get(topic),
+            )
+            weights[topic] = mean if mean is not None else 0.0
+
+        slots = self._apportion_slots(weights, query.sample_size)
+
+        # Fetch a deep candidate pool per topic (already sorted by relevance). The
+        # final list is at most sample_size docs, so no topic can contribute more.
+        pools: dict[str, list[dict]] = {}
         for topic in query.topics:
             docs = await self._document_repo.relevant_documents(
                 topic,
@@ -164,20 +189,32 @@ class VisualisationService:
                 query.date_to,
                 query.languages,
                 query.platforms,
-                proxy_doc_ids.get(topic),
-                limit=RELEVANT_DOCUMENTS_LIMIT,
+                proxy_confidence.get(topic),
+                limit=query.sample_size,
             )
-            for doc in docs:
-                doc = {**doc, "topic": topic}
-                existing = best.get(doc["doc_id"])
-                if existing is None or self._relevance_rank(doc) > self._relevance_rank(existing):
-                    best[doc["doc_id"]] = doc
+            pools[topic] = [{**doc, "topic": topic} for doc in docs]
+
+        # Pass 1: each topic shows its top documents up to its slot count.
+        selected: list[dict] = []
+        for topic in query.topics:
+            selected.extend(pools[topic][: slots[topic]])
+            pools[topic] = pools[topic][slots[topic]:]
+
+        # Pass 2: redistribute slots left unfilled by sparse topics to the best
+        # remaining documents of other topics.
+        shortfall = query.sample_size - len(selected)
+        if shortfall > 0:
+            leftover = [doc for topic in query.topics for doc in pools[topic]]
+            leftover.sort(
+                key=lambda d: (self._relevance_rank(d), d["doc_id"]), reverse=True
+            )
+            selected.extend(leftover[:shortfall])
 
         ranked = sorted(
-            best.values(),
+            selected,
             key=lambda d: (self._relevance_rank(d), d["doc_id"]),
             reverse=True,
-        )[:RELEVANT_DOCUMENTS_LIMIT]
+        )
 
         return [
             DocumentPreview(
@@ -193,8 +230,42 @@ class VisualisationService:
         ]
 
     @staticmethod
+    def _apportion_slots(weights: dict[str, float], sample_size: int) -> dict[str, int]:
+        """Split `sample_size` document slots across topics: one guaranteed slot each,
+        the remainder distributed proportionally to each topic's weight (mean confidence)
+        using the largest-remainder method so the parts sum exactly to `sample_size`.
+
+        Assumes `sample_size >= len(weights)`"""
+        topics = list(weights)
+        slots = dict.fromkeys(topics, 1)
+        remaining = sample_size - len(topics)
+        if remaining <= 0:
+            return slots
+
+        total_weight = sum(weights.values())
+        if total_weight <= 0:
+            # No confidence signal anywhere: spread the remainder evenly.
+            for i in range(remaining):
+                slots[topics[i % len(topics)]] += 1
+            return slots
+
+        quotas = {t: remaining * weights[t] / total_weight for t in topics}
+        floors = {t: int(q) for t, q in quotas.items()}
+        for t in topics:
+            slots[t] += floors[t]
+
+        leftover = remaining - sum(floors.values())
+        # Hand leftover slots to the largest fractional remainders.
+        order = sorted(
+            topics, key=lambda t: (quotas[t] - floors[t], weights[t]), reverse=True
+        )
+        for t in order[:leftover]:
+            slots[t] += 1
+        return slots
+
+    @staticmethod
     def _relevance_rank(doc: dict) -> float:
-        """Sort key: documents with no confidence (proxy-only matches) rank below any
+        """Sort key: documents with no confidence rank below any
         confident match."""
         relevance = doc.get("relevance")
         return relevance if relevance is not None else -1.0

@@ -350,32 +350,34 @@ class TestRelevantDocuments:
         # relevance comes from the matched subtopic, not the (higher) core topic
         assert round(result[0]["relevance"], 2) == 0.42
 
-    async def test_proxy_match_has_none_relevance(self, db, repo):
+    async def test_proxy_match_uses_proxy_confidence(self, db, repo):
         res = await db["documents"].insert_one(make_doc(
             acteu_topic={"label": "other", "confidence": 0.9},
         ))
         proxy_id = str(res.inserted_id)
         result = await repo.relevant_documents(
-            "project_sub", D_FROM, D_TO, [], [], proxy_doc_ids=[proxy_id]
+            "project_sub", D_FROM, D_TO, [], [], proxy_confidence={proxy_id: 0.75}
         )
         assert len(result) == 1
-        assert result[0]["relevance"] is None
+        assert result[0]["relevance"] == 0.75
 
-    async def test_confident_matches_rank_above_none(self, db, repo):
+    async def test_ranks_by_confidence_across_sources(self, db, repo):
         confident = await db["documents"].insert_one(
             make_doc(acteu_topic={"label": "immigration", "confidence": 0.7})
         )
         proxy_only = await db["documents"].insert_one(
             make_doc(acteu_topic={"label": "other", "confidence": 0.9})
         )
-        # both resolve to "immigration": one by core topic, one by proxy id
+        proxy_id = str(proxy_only.inserted_id)
+        # both resolve to "immigration": one by core topic (0.7), one by proxy (0.95)
         result = await repo.relevant_documents(
-            "immigration", D_FROM, D_TO, [], [], proxy_doc_ids=[str(proxy_only.inserted_id)]
+            "immigration", D_FROM, D_TO, [], [], proxy_confidence={proxy_id: 0.95}
         )
         assert len(result) == 2
-        assert result[0]["doc_id"] == str(confident.inserted_id)
-        assert result[0]["relevance"] == 0.7
-        assert result[1]["relevance"] is None
+        assert result[0]["doc_id"] == proxy_id
+        assert result[0]["relevance"] == 0.95
+        assert result[1]["doc_id"] == str(confident.inserted_id)
+        assert result[1]["relevance"] == 0.7
 
     async def test_projects_expected_fields(self, db, repo):
         await db["documents"].insert_one(make_doc(
@@ -403,3 +405,36 @@ class TestRelevantDocuments:
         await db["documents"].insert_one(make_doc())
         result = await repo.relevant_documents("nonexistent", D_FROM, D_TO, [], [])
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# mean_topic_confidence()
+# ---------------------------------------------------------------------------
+
+class TestMeanTopicConfidence:
+    async def test_averages_core_confidence(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.4}),
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.8}),
+        ])
+        mean = await repo.mean_topic_confidence("immigration", D_FROM, D_TO, [], [])
+        assert round(mean, 2) == 0.6
+
+    async def test_includes_proxy_confidence(self, db, repo):
+        # one core match (0.6) and one proxy-only match (0.8) → mean 0.7
+        await db["documents"].insert_one(
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.6})
+        )
+        proxy_only = await db["documents"].insert_one(
+            make_doc(acteu_topic={"label": "other", "confidence": 0.9})
+        )
+        proxy_id = str(proxy_only.inserted_id)
+        mean = await repo.mean_topic_confidence(
+            "immigration", D_FROM, D_TO, [], [], proxy_confidence={proxy_id: 0.8}
+        )
+        assert round(mean, 2) == 0.7
+
+    async def test_none_when_no_match(self, db, repo):
+        await db["documents"].insert_one(make_doc())
+        mean = await repo.mean_topic_confidence("nonexistent", D_FROM, D_TO, [], [])
+        assert mean is None

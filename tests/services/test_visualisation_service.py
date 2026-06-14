@@ -19,13 +19,14 @@ def document_repo() -> AsyncMock:
     repo.topic_presence_by_platform.return_value = []
     repo.entities_for_topic.return_value = []
     repo.relevant_documents.return_value = []
+    repo.mean_topic_confidence.return_value = 0.5
     return repo
 
 
 @pytest.fixture
 def project_service() -> AsyncMock:
     service = AsyncMock()
-    service.get_proxy_doc_ids_by_topics.return_value = {}
+    service.get_proxy_confidence_by_topics.return_value = {}
     return service
 
 
@@ -61,14 +62,14 @@ class TestLoadDashboard:
 
     async def test_no_project_skips_proxy_resolution(self, service, project_service):
         await service.load_dashboard(make_query(), project_id=None)
-        project_service.get_proxy_doc_ids_by_topics.assert_not_called()
+        project_service.get_proxy_confidence_by_topics.assert_not_called()
 
     async def test_project_resolves_proxies(self, service, project_service):
         await service.load_dashboard(make_query(topics=["sub-a"]), project_id="p1")
-        project_service.get_proxy_doc_ids_by_topics.assert_awaited_once_with("p1", ["sub-a"])
+        project_service.get_proxy_confidence_by_topics.assert_awaited_once_with("p1", ["sub-a"])
 
     async def test_proxy_doc_ids_forwarded_to_repo(self, service, document_repo, project_service):
-        project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
+        project_service.get_proxy_confidence_by_topics.return_value = {"immigration": {"a": 1.0, "b": 1.0}}
 
         await service.load_dashboard(make_query(), project_id="p1")
 
@@ -169,7 +170,7 @@ class TestTopicsByPlatform:
         assert document_repo.topic_presence_by_platform.await_count == 2
 
     async def test_proxy_doc_ids_forwarded(self, service, document_repo, project_service):
-        project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
+        project_service.get_proxy_confidence_by_topics.return_value = {"immigration": {"a": 1.0, "b": 1.0}}
         await service.load_dashboard(make_query(), project_id="p1")
         args = document_repo.topic_presence_by_platform.call_args.args
         assert args[5] == ["a", "b"]
@@ -214,7 +215,7 @@ class TestTopEntities:
         assert document_repo.entities_for_topic.await_count == 3
 
     async def test_proxy_doc_ids_forwarded(self, service, document_repo, project_service):
-        project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
+        project_service.get_proxy_confidence_by_topics.return_value = {"immigration": {"a": 1.0, "b": 1.0}}
         await service.load_dashboard(make_query(), project_id="p1")
         args = document_repo.entities_for_topic.call_args.args
         assert args[5] == ["a", "b"]
@@ -269,9 +270,9 @@ class TestRelevantDocuments:
         ids = [r.doc_id for r in result.relevant_documents]
         assert ids == ["d2", "d1"]
 
-    async def test_dedup_keeps_highest_relevance(self, service, document_repo):
+    async def test_shared_document_appears_under_each_topic(self, service, document_repo):
         def per_topic(topic, *args, **kwargs):
-            # same doc matched by two topics with different confidence
+            # the same doc exemplifies both topics, with different confidence
             return {
                 "a": [make_relevant("d1", 0.3)],
                 "b": [make_relevant("d1", 0.8)],
@@ -279,15 +280,20 @@ class TestRelevantDocuments:
         document_repo.relevant_documents.side_effect = per_topic
 
         result = await service.load_dashboard(make_query(topics=["a", "b"]))
-        assert len(result.relevant_documents) == 1
-        assert result.relevant_documents[0].relevance_score == 0.8
+        pairs = [(r.doc_id, r.topic) for r in result.relevant_documents]
+        # appears once under each topic, so neither topic is starved
+        assert ("d1", "a") in pairs
+        assert ("d1", "b") in pairs
+        assert len(result.relevant_documents) == 2
 
-    async def test_capped_at_ten(self, service, document_repo):
+    async def test_capped_at_sample_size(self, service, document_repo):
         document_repo.relevant_documents.return_value = [
-            make_relevant(f"d{i}", 0.5 + i / 100) for i in range(15)
+            make_relevant(f"d{i}", 0.5 + i / 100) for i in range(20)
         ]
-        result = await service.load_dashboard(make_query(topics=["immigration"]))
-        assert len(result.relevant_documents) == 10
+        result = await service.load_dashboard(
+            make_query(topics=["immigration"], sample_size=12)
+        )
+        assert len(result.relevant_documents) == 12
 
     async def test_long_excerpt_truncated_to_250(self, service, document_repo):
         document_repo.relevant_documents.return_value = [
@@ -298,8 +304,80 @@ class TestRelevantDocuments:
         assert excerpt.endswith("...")
         assert len(excerpt) <= 253
 
-    async def test_proxy_doc_ids_forwarded(self, service, document_repo, project_service):
-        project_service.get_proxy_doc_ids_by_topics.return_value = {"immigration": ["a", "b"]}
+    async def test_proxy_confidence_forwarded(self, service, document_repo, project_service):
+        project_service.get_proxy_confidence_by_topics.return_value = {"immigration": {"a": 1.0, "b": 1.0}}
         await service.load_dashboard(make_query(), project_id="p1")
         args = document_repo.relevant_documents.call_args.args
-        assert args[5] == ["a", "b"]
+        assert args[5] == {"a": 1.0, "b": 1.0}
+
+    async def test_slots_proportional_to_mean_confidence(self, service, document_repo):
+        # Topic "a" has higher mean confidence than "b", so it should contribute more
+        # documents to the sample. Each topic owns a distinct, plentiful doc set.
+        def mean(topic, *args, **kwargs):
+            return {"a": 0.9, "b": 0.1}[topic]
+        document_repo.mean_topic_confidence.side_effect = mean
+
+        def per_topic(topic, *args, **kwargs):
+            return [make_relevant(f"{topic}{i}", 0.5) for i in range(10)]
+        document_repo.relevant_documents.side_effect = per_topic
+
+        result = await service.load_dashboard(make_query(topics=["a", "b"], sample_size=10))
+        topics = [r.topic for r in result.relevant_documents]
+        assert len(result.relevant_documents) == 10
+        assert topics.count("a") > topics.count("b")
+
+    async def test_low_confidence_topic_still_appears(self, service, document_repo):
+        # "b" has zero mean confidence but must still contribute its guaranteed slot.
+        def mean(topic, *args, **kwargs):
+            return {"a": 0.99, "b": 0.0}[topic]
+        document_repo.mean_topic_confidence.side_effect = mean
+
+        def per_topic(topic, *args, **kwargs):
+            return [make_relevant(f"{topic}{i}", 0.5) for i in range(10)]
+        document_repo.relevant_documents.side_effect = per_topic
+
+        result = await service.load_dashboard(make_query(topics=["a", "b"], sample_size=10))
+        topics = [r.topic for r in result.relevant_documents]
+        assert topics.count("b") >= 1
+
+    async def test_sparse_topic_slots_redistributed(self, service, document_repo):
+        # "b" only owns 1 document; its unfilled slots are redistributed to "a" so the
+        # sample still reaches sample_size.
+        def per_topic(topic, *args, **kwargs):
+            if topic == "b":
+                return [make_relevant("b0", 0.5)]
+            return [make_relevant(f"a{i}", 0.5) for i in range(20)]
+        document_repo.relevant_documents.side_effect = per_topic
+
+        result = await service.load_dashboard(make_query(topics=["a", "b"], sample_size=10))
+        topics = [r.topic for r in result.relevant_documents]
+        assert len(result.relevant_documents) == 10
+        assert topics.count("b") == 1
+        assert topics.count("a") == 9
+
+
+# ---------------------------------------------------------------------------
+# _apportion_slots (pure apportionment logic)
+# ---------------------------------------------------------------------------
+
+class TestApportionSlots:
+    def test_sums_to_sample_size(self):
+        slots = VisualisationService._apportion_slots({"a": 0.9, "b": 0.3, "c": 0.5}, 30)
+        assert sum(slots.values()) == 30
+
+    def test_minimum_one_per_topic(self):
+        slots = VisualisationService._apportion_slots({"a": 1.0, "b": 0.0}, 10)
+        assert slots["b"] == 1
+        assert slots["a"] == 9
+
+    def test_proportional_allocation(self):
+        slots = VisualisationService._apportion_slots({"a": 0.9, "b": 0.3}, 12)
+        assert slots["a"] > slots["b"]
+
+    def test_zero_total_weight_spreads_evenly(self):
+        slots = VisualisationService._apportion_slots({"a": 0.0, "b": 0.0}, 10)
+        assert slots == {"a": 5, "b": 5}
+
+    def test_sample_size_equal_to_topic_count(self):
+        slots = VisualisationService._apportion_slots({"a": 0.9, "b": 0.3}, 2)
+        assert slots == {"a": 1, "b": 1}

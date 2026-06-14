@@ -97,17 +97,18 @@ class ProjectService:
             project_id, subtopics, confidence_threshold
         )
 
-    async def get_proxy_doc_ids_by_topics(
+    async def get_proxy_confidence_by_topics(
         self,
         project_id: str,
         topics: list[str]
-    ) -> dict[str, list[str]]:
-        """Maps each requested topic to the doc_ids whose project proxies carry a label for it.
-        Used by the visualiser to resolve project-scoped subtopics. Topics with no proxy
-        matches are omitted."""
+    ) -> dict[str, dict[str, float]]:
+        """Maps each requested topic to a {doc_id: confidence} map drawn from the project's
+        proxies. Used by the visualiser to resolve project-scoped subtopics (both for
+        matching documents and for their relevance). Topics with no proxy matches are
+        omitted."""
         if not topics:
             return {}
-        return await self._project_repo.find_proxy_doc_ids_by_topics(project_id, topics)
+        return await self._project_repo.find_proxy_confidence_by_topics(project_id, topics)
 
     async def upsert_document_proxies(self, project_id: str, proxies: list[DocumentProxy]) -> None:
         await self._project_repo.upsert_document_proxies(project_id, proxies)

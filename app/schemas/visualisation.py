@@ -9,6 +9,7 @@ class VisualisationQuery(BaseModel):
     date_to: datetime
     languages: list[str]
     platforms: list[str]
+    sample_size: int = 30
 
 
 class EntityScore(BaseModel):
