@@ -32,6 +32,10 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   if (!res.ok) {
     throw new ApiError(res.status, `API error ${res.status}: ${await res.text()}`);
   }
+  // 204 / empty-body responses (e.g. DELETE) have no JSON to parse.
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -56,6 +60,18 @@ export const api = {
   getProject: (id: string, token?: string) => request<Project>(`/projects/${id}`, {}, token),
   deleteProject: (id: string, token?: string) =>
     request<void>(`/projects/${id}`, { method: "DELETE" }, token),
+
+  // Classifiers (scoped to a project)
+  deleteClassifier: (projectId: string, classifierId: string, token?: string) =>
+    request<void>(`/projects/${projectId}/classifiers/${classifierId}`, { method: "DELETE" }, token),
+  // Fetches the .bin as a Blob with auth (a plain <a> can't send the bearer token).
+  downloadClassifier: async (projectId: string, classifierId: string, token?: string): Promise<Blob> => {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/classifiers/${classifierId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, `API error ${res.status}`);
+    return res.blob();
+  },
 
   // Search facets — languages present in at least one document (dynamic, like topics)
   listLanguages: (token?: string) => request<string[]>("/search/languages", {}, token),

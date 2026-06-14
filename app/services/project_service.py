@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -61,6 +62,18 @@ class ProjectService:
         if classifier is None:
             raise ClassifierNotFound
         return classifier
+
+    async def delete_classifier(self, project_id: str, classifier_id: str) -> None:
+        """Delete a classifier: its .bin model file, its embedded metadata, and the
+        document-proxy labels it produced. Raises ClassifierNotFound if absent."""
+        classifier = await self._project_repo.find_classifier(project_id, classifier_id)
+        if classifier is None:
+            raise ClassifierNotFound
+        try:
+            os.remove(classifier.file_path)
+        except OSError:
+            pass
+        await self._project_repo.delete_classifier(project_id, classifier_id)
 
     async def get_available_topics(self, project_id: str) -> list[Topic]:
         """Returns the 3 core topics plus all topics across the project's classifiers."""

@@ -54,6 +54,24 @@ class ProjectRepository:
             return [ClassifierMetadata.model_validate(c) for c in doc["classifiers"]]
         return []
 
+    async def delete_classifier(self, project_id: str, classifier_id: str) -> None:
+        """Remove the classifier and every document-proxy label it produced, then drop
+        any proxy left with no labels. Mirrors the full cascade of project deletion."""
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {
+                "$pull": {
+                    "classifiers": {"classifier_id": classifier_id},
+                    "document_proxies.$[].labels": {"classifier_id": classifier_id},
+                }
+            },
+        )
+        # Second pass: prune proxies whose labels are now empty.
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {"$pull": {"document_proxies": {"labels": {"$size": 0}}}},
+        )
+
     async def filter_proxy_doc_ids_by_subtopics(
         self,
         project_id: str,
