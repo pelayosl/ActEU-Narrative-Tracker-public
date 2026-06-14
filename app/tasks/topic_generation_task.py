@@ -23,6 +23,12 @@ from app.schemas.topic import OTHER_TOPIC_ID, GenerateTopicsResponse, Topic
 from app.tasks.celery_app import celery_app
 
 
+# Minimum number of documents BERTopic/UMAP need to cluster meaningfully.
+# Below this, UMAP's k-NN graph collapses to an empty array and fit_transform
+# raises "zero-size array to reduction operation maximum".
+MIN_DOCUMENTS_FOR_TOPICS = 10
+
+
 def _update(task: Task, progress: int, step: str) -> None:
     task.update_state(state="PROGRESS", meta={"progress": progress, "step": step})
 
@@ -100,7 +106,7 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
     ]
     text_doc_pairs = [(text, doc_id) for text, doc_id in text_doc_pairs if text]
 
-    if len(text_doc_pairs) < 2:
+    if len(text_doc_pairs) < MIN_DOCUMENTS_FOR_TOPICS:
         await _store_pending_pipeline(project_id, job_id, [], {})
         return GenerateTopicsResponse(topics=[]).model_dump()
 

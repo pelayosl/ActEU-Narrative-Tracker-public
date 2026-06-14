@@ -7,6 +7,7 @@ import { QueryPanel } from "@/components/visualiser/query-panel";
 import { TopicEvolutionChart } from "@/components/visualiser/topic-evolution-chart";
 import { LanguageBreakdown } from "@/components/visualiser/language-breakdown";
 import { TopEntities } from "@/components/visualiser/top-entities";
+import { DocumentsList } from "@/components/visualiser/documents-list";
 import { ProjectSelectorDialog } from "@/components/projects/project-selector-dialog";
 import { TOPIC_COLORS, type TopicSeriesMeta } from "@/components/visualiser/topic-colors";
 import { api } from "@/lib/api-client";
@@ -71,6 +72,7 @@ export default function VisualiserPage() {
             <TopicEvolutionChart data={dashboard.topic_evolution} topics={topicMeta} />
             <LanguageBreakdown data={dashboard.topics_by_language} topics={topicMeta} />
             <TopEntities data={dashboard.top_entities} topics={topicMeta} />
+            <DocumentsList data={dashboard.relevant_documents} topics={topicMeta} />
           </>
         )}
       </div>

@@ -33,6 +33,10 @@ const CORE_TOPICS: { label: string; value: string }[] = [
   { label: "Gender Issues", value: "gender_issues" },
 ];
 
+// Topics are capped so the relevant-documents sample can guarantee each topic a slot.
+const MAX_TOPICS = 5;
+const DEFAULT_SAMPLE_SIZE = 30;
+
 function Pill({
   active,
   onClick,
@@ -76,6 +80,7 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
   const [dateTo, setDateTo] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
   const [platforms, setPlatforms] = useState<string[]>([]);
+  const [sampleSize, setSampleSize] = useState(DEFAULT_SAMPLE_SIZE);
 
   // Topic library: 3 core topics + the project's classifier subtopics (value = id).
   const topicOptions = useMemo(() => {
@@ -94,7 +99,9 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
   // this project's library.
   useEffect(() => {
     if (!prefill) return;
-    setTopics(prefill.topics.filter((v) => topicOptions.some((o) => o.value === v)));
+    setTopics(
+      prefill.topics.filter((v) => topicOptions.some((o) => o.value === v)).slice(0, MAX_TOPICS),
+    );
     if (prefill.date_from) setDateFrom(prefill.date_from.slice(0, 10));
     if (prefill.date_to) setDateTo(prefill.date_to.slice(0, 10));
     setLanguages(prefill.languages);
@@ -120,8 +127,12 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
   }, [availableLanguages]);
 
   const unselectedTopics = topicOptions.filter((o) => !topics.includes(o.value));
+  const atTopicLimit = topics.length >= MAX_TOPICS;
   const dateInvalid = Boolean(dateFrom) && Boolean(dateTo) && dateFrom > dateTo;
-  const canLoad = topics.length > 0 && Boolean(dateFrom) && Boolean(dateTo) && !dateInvalid && !loading;
+  // sample_size must be at least one slot per topic (backend apportionment assumption).
+  const sampleValid = sampleSize >= topics.length;
+  const canLoad =
+    topics.length > 0 && Boolean(dateFrom) && Boolean(dateTo) && !dateInvalid && sampleValid && !loading;
 
   const toggle =
     (setList: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
@@ -137,6 +148,7 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
       date_to: `${dateTo}T23:59:59`,
       languages,
       platforms: platforms as Platform[],
+      sample_size: sampleSize,
     };
     const topicLabels = Object.fromEntries(topics.map((v) => [v, labelFor(v)]));
     onLoad(query, topicLabels);
@@ -170,7 +182,7 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
             </span>
           ))}
 
-          {unselectedTopics.length > 0 && (
+          {unselectedTopics.length > 0 && !atTopicLimit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -191,6 +203,9 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
             </DropdownMenu>
           )}
         </div>
+        {atTopicLimit && (
+          <p className="mt-1 text-xs text-muted-foreground">Up to {MAX_TOPICS} topics.</p>
+        )}
       </div>
 
       {/* Date range */}
@@ -227,6 +242,27 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
             </Pill>
           ))}
         </div>
+      </div>
+
+      {/* Relevant-documents sample size */}
+      <div>
+        <Label htmlFor="sample-size">Documents to sample</Label>
+        <Input
+          id="sample-size"
+          type="number"
+          min={Math.max(topics.length, 1)}
+          max={100}
+          value={sampleSize}
+          onChange={(e) => setSampleSize(Number(e.target.value))}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Total relevant documents, shared across topics by confidence.
+        </p>
+        {!sampleValid && (
+          <p className="mt-1 text-xs text-acteu-red">
+            Must be at least the number of selected topics ({topics.length}).
+          </p>
+        )}
       </div>
 
       <Button onClick={handleLoad} disabled={!canLoad} className="w-full">

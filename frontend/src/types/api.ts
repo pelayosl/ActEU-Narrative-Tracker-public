@@ -90,6 +90,7 @@ export interface VisualisationQuery {
   date_to: string;
   languages: string[];
   platforms: Platform[];
+  sample_size: number; // total relevant-documents sample, apportioned across topics
 }
 
 // Each series/breakdown's `topic` field is the identifier submitted in the query
