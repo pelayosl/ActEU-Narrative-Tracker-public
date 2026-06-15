@@ -186,6 +186,34 @@ def seed_core_topics(db) -> None:
     print(f"  → Inserted {len(CORE_TOPICS)} core topics.")
 
 
+def seed_subtopics_catalog(db) -> None:
+    """Upsert every db subtopic found in the loaded documents into the
+    topics catalog with core_topic=None. topic_ids are deterministic (uuid5 of the
+    label, assigned at ingestion), so this is idempotent across loads and batches."""
+    print("\nSeeding db subtopics catalog...")
+    pipeline = [
+        {"$unwind": "$subtopics"},
+        {"$group": {"_id": "$subtopics.topic_id", "label": {"$first": "$subtopics.label"}}},
+    ]
+    count = 0
+    for row in db.documents.aggregate(pipeline):
+        if not row.get("_id") or not row.get("label"):
+            continue
+        db.topics.update_one(
+            {"topic_id": row["_id"]},
+            {"$setOnInsert": {
+                "topic_id": row["_id"],
+                "name": row["label"],
+                "description": "",
+                "core_topic": None,
+                "created_at": datetime.now(timezone.utc),
+            }},
+            upsert=True,
+        )
+        count += 1
+    print(f"  → Upserted {count} db subtopics into the catalog.")
+
+
 def seed_admin_and_project(db) -> None:
     if not ADMIN_PASSWORD:
         raise ValueError("ADMIN_PASSWORD is required (set it in .env or env vars).")
@@ -243,6 +271,7 @@ def main() -> None:
         grand_total_skipped += skipped
 
     seed_core_topics(db)
+    seed_subtopics_catalog(db)
     seed_admin_and_project(db)
     create_indexes(db)
 

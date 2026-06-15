@@ -20,8 +20,8 @@ from ingestion import (
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-INPUT_DIR = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\news\\fi")
-OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\news\\news-fi-db.ndjson")
+INPUT_DIR = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\news\\es")
+OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\news\\news-es-db.ndjson")
 # ──────────────────────────────────────────────────────────────────────────────
 
 

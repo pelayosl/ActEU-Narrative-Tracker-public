@@ -17,8 +17,8 @@ from ingestion import (
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\tweets\\tweets-fi.ndjson")
-OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\tweets\\tweets-fi-db.ndjson")
+INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\tweets\\tweets-es.ndjson")
+OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\tweets\\tweets-es-db.ndjson")
 # ──────────────────────────────────────────────────────────────────────────────
 
 

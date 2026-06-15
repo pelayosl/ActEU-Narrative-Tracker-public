@@ -74,6 +74,83 @@ def service(project_repo, topic_repo) -> ProjectService:
 
 
 # ---------------------------------------------------------------------------
+# get_available_topics() — search-form facets from the DB
+# ---------------------------------------------------------------------------
+
+class TestGetAvailableTopics:
+    async def test_splits_native_and_merges_project_subtopics(self, service, topic_repo, project_repo):
+        topic_repo.find_all.return_value = [
+            Topic(topic_id="u1", name="Immigration", description="", core_topic="immigration"),
+            Topic(topic_id="u2", name="Gender Issues", description="", core_topic="gender_issues"),
+            Topic(topic_id="s1", name="Asylum policy", description=""),  # db subtopic
+            Topic(topic_id="s2", name="Women & sports", description=""),
+        ]
+        project_repo.find_all_classifiers.return_value = [
+            make_classifier("c1", topics=[make_topic("p1")]),
+        ]
+
+        result = await service.get_available_topics("proj-1")
+
+        # core topics submit their slug
+        assert [(c.value, c.label) for c in result.core_topics] == [
+            ("immigration", "Immigration"),
+            ("gender_issues", "Gender Issues"),
+        ]
+        # subtopics = db ∪ project, sorted by label
+        assert [(s.value, s.label) for s in result.subtopics] == [
+            ("s1", "Asylum policy"),
+            ("p1", "Topic p1"),
+            ("s2", "Women & sports"),
+        ]
+
+    async def test_project_label_wins_on_topic_id_collision(self, service, topic_repo, project_repo):
+        topic_repo.find_all.return_value = [
+            Topic(topic_id="x", name="DB label", description=""),
+        ]
+        project_repo.find_all_classifiers.return_value = [
+            make_classifier("c1", topics=[Topic(topic_id="x", name="Project label", description="")]),
+        ]
+
+        result = await service.get_available_topics("proj-1")
+
+        assert [(s.value, s.label) for s in result.subtopics] == [("x", "Project label")]
+
+
+# ---------------------------------------------------------------------------
+# delete_classifier() — file removal + cascade delegation
+# ---------------------------------------------------------------------------
+
+class TestDeleteClassifier:
+    async def test_not_found_raises(self, service, project_repo):
+        project_repo.find_classifier.return_value = None
+
+        with pytest.raises(ClassifierNotFound):
+            await service.delete_classifier("proj-1", "clf-1")
+
+        project_repo.delete_classifier.assert_not_awaited()
+
+    async def test_removes_file_and_delegates(self, service, project_repo, tmp_path):
+        bin_file = tmp_path / "clf-1.bin"
+        bin_file.write_bytes(b"model")
+        classifier = make_classifier("clf-1")
+        classifier.file_path = str(bin_file)
+        project_repo.find_classifier.return_value = classifier
+
+        await service.delete_classifier("proj-1", "clf-1")
+
+        assert not bin_file.exists()
+        project_repo.delete_classifier.assert_awaited_once_with("proj-1", "clf-1")
+
+    async def test_missing_file_is_tolerated(self, service, project_repo):
+        # file_path points nowhere — deletion still proceeds at the DB level.
+        project_repo.find_classifier.return_value = make_classifier("clf-1")
+
+        await service.delete_classifier("proj-1", "clf-1")
+
+        project_repo.delete_classifier.assert_awaited_once_with("proj-1", "clf-1")
+
+
+# ---------------------------------------------------------------------------
 # apply_pipeline_labels() — pipeline / classifier ownership guard
 # ---------------------------------------------------------------------------
 
