@@ -26,7 +26,7 @@ class SearchService:
         return await self._document_repo.distinct_languages()
 
     def _matched_subtopic_labels(self, doc: dict, query: SearchQuery) -> list[str]:
-        """Document-level (ACTEU-native) subtopic labels carried by the doc that the query
+        """Document-level subtopic labels carried by the doc that the query
         asked for, honouring the confidence threshold when set."""
         if not query.subtopics:
             return []

@@ -25,13 +25,6 @@ const PLATFORMS: { label: string; value: Platform }[] = [
   { label: "Online Media", value: "media" },
 ];
 
-// ActEU core topics submit their stored label; project subtopics submit their topic_id (UUID).
-const ACTEU_TOPICS: { label: string; value: string }[] = [
-  { label: "Immigration", value: "immigration" },
-  { label: "Climate Change", value: "climate_change" },
-  { label: "Gender Issues", value: "gender_issues" },
-];
-
 function Pill({
   active,
   onClick,
@@ -130,16 +123,18 @@ export function SearchForm({
     }));
   }, [availableLanguages]);
 
-  // Subtopics are the project's classifier topics (value = topic_id), sorted alphabetically.
-  const subtopicOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const classifier of activeProject?.classifiers ?? []) {
-      for (const topic of classifier.topics) seen.set(topic.topic_id, topic.name);
-    }
-    return [...seen]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [activeProject]);
+  // Topic facets come entirely from the DB: the 3 core ACTEU topics and the
+  // subtopics available for this project (document-native db subtopics ∪ the
+  // project's classifier subtopics, already merged and sorted server-side).
+  const { data: topicFacets } = useQuery({
+    queryKey: ["project-topics", activeProject?.project_id],
+    queryFn: () => api.getProjectTopics(activeProject!.project_id, session?.accessToken),
+    enabled: Boolean(session?.accessToken && activeProject?.project_id),
+    staleTime: Infinity,
+  });
+
+  const coreTopicOptions = topicFacets?.core_topics ?? [];
+  const subtopicOptions = topicFacets?.subtopics ?? [];
 
   const unselectedSubtopics = subtopicOptions.filter((o) => !subtopics.includes(o.value));
 
@@ -226,7 +221,7 @@ export function SearchForm({
         />
       )}
       <Facet label="Platforms" options={PLATFORMS} selected={platforms} onToggle={toggle(setPlatforms)} />
-      <Facet label="ActEU topics" options={ACTEU_TOPICS} selected={topics} onToggle={toggle(setTopics)} />
+      <Facet label="ActEU topics" options={coreTopicOptions} selected={topics} onToggle={toggle(setTopics)} />
 
       <div>
         <Label>Subtopics</Label>
@@ -253,7 +248,7 @@ export function SearchForm({
 
           {subtopicOptions.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No subtopics available — train a classifier in this project to create some.
+              No subtopics available yet — they come from the dataset or from training a classifier.
             </p>
           ) : (
             unselectedSubtopics.length > 0 && (

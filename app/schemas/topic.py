@@ -15,6 +15,9 @@ class Topic(BaseModel):
     name: str
     description: str
     origin_topic_ids: list[str] = []
+    # The core ACTEU slug ("immigration"/"climate_change"/"gender_issues") for the 3
+    # core topics; None for every subtopic (db-native and project-generated alike).
+    core_topic: str | None = None
 
 
 class GenerateTopicsRequest(BaseModel):

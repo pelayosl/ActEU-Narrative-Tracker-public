@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { QueryPanel } from "@/components/visualiser/query-panel";
 import { TopicEvolutionChart } from "@/components/visualiser/topic-evolution-chart";
 import { LanguageBreakdown } from "@/components/visualiser/language-breakdown";
+import { PlatformBreakdown } from "@/components/visualiser/platform-breakdown";
 import { TopEntities } from "@/components/visualiser/top-entities";
 import { DocumentsList } from "@/components/visualiser/documents-list";
 import { ProjectSelectorDialog } from "@/components/projects/project-selector-dialog";
@@ -71,6 +72,7 @@ export default function VisualiserPage() {
           <>
             <TopicEvolutionChart data={dashboard.topic_evolution} topics={topicMeta} />
             <LanguageBreakdown data={dashboard.topics_by_language} topics={topicMeta} />
+            <PlatformBreakdown data={dashboard.topics_by_platform} topics={topicMeta} />
             <TopEntities data={dashboard.top_entities} topics={topicMeta} />
             <DocumentsList data={dashboard.relevant_documents} topics={topicMeta} />
           </>

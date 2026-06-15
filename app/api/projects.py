@@ -8,7 +8,7 @@ from app.api.dependencies import get_current_user, get_project_service
 from app.exceptions import ClassifierNotFound, ProjectAccessDenied, ProjectNotFound
 from app.schemas.auth import User
 from app.schemas.project import Project
-from app.schemas.topic import Topic
+from app.schemas.search import SearchTopics
 from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -114,7 +114,9 @@ async def get_available_topics(
     project_id: str,
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> list[Topic]:
+) -> SearchTopics:
+    """Search-form topic facets for a project, sourced from the database: the 3 core
+    ACTEU topics + subtopics (db-native ∪ this project's classifier subtopics)."""
     try:
         await service.verify_project_owner(project_id, current_user.user_id)
         return await service.get_available_topics(project_id)

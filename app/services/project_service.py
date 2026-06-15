@@ -18,6 +18,7 @@ from app.schemas.classification import (
     ProxyLabel,
 )
 from app.schemas.project import PendingPipeline, Project
+from app.schemas.search import SearchTopics, TopicChoice
 from app.schemas.topic import Topic
 
 
@@ -75,19 +76,37 @@ class ProjectService:
             pass
         await self._project_repo.delete_classifier(project_id, classifier_id)
 
-    async def get_available_topics(self, project_id: str) -> list[Topic]:
-        """Returns the 3 core topics plus all topics across the project's classifiers."""
-        core_topics = await self._topic_repo.find_all()
-        classifiers = await self._project_repo.find_all_classifiers(project_id)
+    async def get_available_topics(self, project_id: str) -> SearchTopics:
+        """Search-form topic facets, sourced entirely from the database:
+        - core ACTEU topics and db-native subtopics come from the topics collection
+          (split by `core_topic`: a slug marks a core topic, None marks a subtopic);
+        - the project's classifier subtopics are merged into the subtopics
+        Core topics submit their slug; subtopics submit their topic_id."""
+        native = await self._topic_repo.find_all()
 
-        seen = {t.topic_id for t in core_topics}
-        subtopics = [
-            topic
-            for classifier in classifiers
-            for topic in classifier.topics
-            if topic.topic_id not in seen and not seen.add(topic.topic_id)
+        core_topics = [
+            TopicChoice(value=t.core_topic, label=t.name)
+            for t in native
+            if t.core_topic is not None
         ]
-        return core_topics + subtopics
+
+        subtopics: dict[str, str] = {
+            t.topic_id: t.name 
+            for t in native 
+            if t.core_topic is None
+        }
+        classifiers = await self._project_repo.find_all_classifiers(project_id)
+        for classifier in classifiers:
+            for topic in classifier.topics:  # project labels win on collision
+                subtopics[topic.topic_id] = topic.name
+
+        return SearchTopics(
+            core_topics=core_topics,
+            subtopics=[
+                TopicChoice(value=tid, label=name)
+                for tid, name in sorted(subtopics.items(), key=lambda kv: kv[1].lower())
+            ],
+        )
 
     async def verify_project_owner(self, project_id: str, user_id: str) -> None:
         """Raises ProjectNotFound or ProjectAccessDenied if the user does not own the project."""

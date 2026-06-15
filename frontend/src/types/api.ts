@@ -38,6 +38,16 @@ export interface SearchResult {
   retrieved_docs: DocumentSummary[];
 }
 
+export interface TopicChoice {
+  value: string; // core_topic label (core topics) or topic_id (subtopics)
+  label: string;
+}
+
+export interface SearchTopics {
+  core_topics: TopicChoice[];
+  subtopics: TopicChoice[]; // db subtopics ∪ project classifier subtopics
+}
+
 export interface ClassifierMetadata {
   classifier_id: string;
   name: string;

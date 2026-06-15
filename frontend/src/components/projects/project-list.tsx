@@ -60,7 +60,22 @@ export function ProjectList() {
   const deleteClassifier = useMutation({
     mutationFn: (vars: { projectId: string; classifierId: string }) =>
       api.deleteClassifier(vars.projectId, vars.classifierId, token),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      // The search form's topic facets are server-driven and per-project; refetch them
+      // so the deleted classifier's subtopics disappear without a page refresh.
+      queryClient.invalidateQueries({ queryKey: ["project-topics", vars.projectId] });
+      // Keep the active project's snapshot in sync so the Visualiser topic picker
+      // (which still reads activeProject.classifiers) drops it immediately too.
+      if (activeProject?.project_id === vars.projectId) {
+        setActiveProject({
+          ...activeProject,
+          classifiers: activeProject.classifiers.filter(
+            (c) => c.classifier_id !== vars.classifierId,
+          ),
+        });
+      }
+    },
     onError: () => setError("Could not delete the classifier. Please try again."),
     onSettled: () => setDeleteClassifierTarget(null),
   });

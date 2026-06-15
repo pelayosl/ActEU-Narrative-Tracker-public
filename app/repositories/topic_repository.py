@@ -15,6 +15,8 @@ class TopicRepository:
         return None
 
     async def find_all(self) -> list[Topic]:
+        """All native topics: the 3 core topics (core_topic = slug) and the db subtopics
+        (core_topic = None). Project subtopics live in projects, not here."""
         cursor = self._collection.find()
         return [Topic(**doc) async for doc in cursor]
 

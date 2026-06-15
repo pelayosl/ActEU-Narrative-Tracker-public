@@ -5,6 +5,7 @@ import type {
   Project,
   SearchQuery,
   SearchResult,
+  SearchTopics,
   Topic,
   UserPublic,
   VisualisationQuery,
@@ -75,6 +76,9 @@ export const api = {
 
   // Search facets — languages present in at least one document (dynamic, like topics)
   listLanguages: (token?: string) => request<string[]>("/search/languages", {}, token),
+  // Search-form topic facets (core topics + db ∪ project subtopics), DB-sourced.
+  getProjectTopics: (projectId: string, token?: string) =>
+    request<SearchTopics>(`/projects/${projectId}/topics`, {}, token),
 
   // Search — project_id is needed only so project-scoped subtopics can be resolved
   search: (query: SearchQuery, token?: string, projectId?: string) =>
