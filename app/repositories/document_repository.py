@@ -107,16 +107,17 @@ class DocumentRepository:
         """Match stage for a single visualisation topic.
 
         A document matches the topic when it carries it as a core topic
-        (`acteu_topic.label`), as a db subtopic (`subtopics.label`), or when its
-        id is among the project proxy doc_ids resolved for that topic. The
-        date/language/platform constraints apply uniformly to every source.
-        
+        (`acteu_topic.label` == slug), as a db subtopic (`subtopics.topic_id` == the
+        subtopic UUID), or when its id is among the project proxy doc_ids resolved for
+        that topic. The date/language/platform constraints apply uniformly to every
+        source. Core topics arrive as their slug; subtopics as their topic_id.
+
         Essentially:
-        {"$or": [{"acteu_topic.label": topic}, {"subtopics.label": topic}, {"_id": {"$in": object_ids}}]}
+        {"$or": [{"acteu_topic.label": topic}, {"subtopics.topic_id": topic}, {"_id": {"$in": object_ids}}]}
         """
         topic_clauses: list[dict] = [
             {"acteu_topic.label": topic},
-            {"subtopics.label": topic},
+            {"subtopics.topic_id": topic},
         ]
         if proxy_doc_ids:
             object_ids = self._coerce_object_ids(proxy_doc_ids)
@@ -253,10 +254,10 @@ class DocumentRepository:
         Builds a MongoDB aggregation stage to compute a document-level
         relevance score for a given topic. Adds a _relevance field.
 
-        Precedence: ActEU core topic -> acteu_topic.confidence; otherwise the
-        matching subtopics[].confidence; otherwise, when the document matched via a
-        project proxy for this topic, the proxy confidence (passed in
-        `proxy_confidence` as a {doc_id: confidence} map); else None.
+        Precedence: ActEU core topic (acteu_topic.label == slug) -> acteu_topic.confidence;
+        otherwise the matching subtopics[].confidence (matched by subtopics.topic_id);
+        otherwise, when the document matched via a project proxy for this topic, the proxy
+        confidence (passed in `proxy_confidence` as a {doc_id: confidence} map); else None.
         '''
         doc_relevance = {
             "$cond": [
@@ -269,7 +270,7 @@ class DocumentRepository:
                                 "$filter": {
                                     "input": {"$ifNull": ["$subtopics", []]},
                                     "as": "s",
-                                    "cond": {"$eq": ["$$s.label", topic]},
+                                    "cond": {"$eq": ["$$s.topic_id", topic]},
                                 }
                             }
                         },

@@ -60,7 +60,8 @@ class TestTopicPresenceOverTime:
             acteu_topic={"label": "climate_change", "confidence": 0.9},
             subtopics=[{"topic_id": "t1", "label": "wind_energy", "confidence": 0.7}],
         ))
-        result = await repo.topic_presence_over_time("wind_energy", D_FROM, D_TO, [], [])
+        # db subtopics are matched by topic_id (the value the frontend submits), not label.
+        result = await repo.topic_presence_over_time("t1", D_FROM, D_TO, [], [])
         assert result == [{"date": "2024-05-07", "count": 1}]
 
     async def test_matches_proxy_doc_ids(self, db, repo):
@@ -198,7 +199,7 @@ class TestTopicPresenceByPlatform:
             acteu_topic={"label": "climate_change", "confidence": 0.9},
             subtopics=[{"topic_id": "t1", "label": "wind_energy", "confidence": 0.7}],
         ))
-        result = await repo.topic_presence_by_platform("wind_energy", D_FROM, D_TO, [], [])
+        result = await repo.topic_presence_by_platform("t1", D_FROM, D_TO, [], [])
         assert result == [{"platform": "media", "count": 1}]
 
     async def test_matches_proxy_doc_ids(self, db, repo):
@@ -345,7 +346,7 @@ class TestRelevantDocuments:
             acteu_topic={"label": "climate_change", "confidence": 0.99},
             subtopics=[{"topic_id": "t1", "label": "wind_energy", "confidence": 0.42}],
         ))
-        result = await repo.relevant_documents("wind_energy", D_FROM, D_TO, [], [])
+        result = await repo.relevant_documents("t1", D_FROM, D_TO, [], [])
         assert len(result) == 1
         # relevance comes from the matched subtopic, not the (higher) core topic
         assert round(result[0]["relevance"], 2) == 0.42

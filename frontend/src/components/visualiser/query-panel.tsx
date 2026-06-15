@@ -26,13 +26,6 @@ const PLATFORMS: { label: string; value: Platform }[] = [
   { label: "Online Media", value: "media" },
 ];
 
-// Core topics submit their stored label; project subtopics submit their topic_id.
-const CORE_TOPICS: { label: string; value: string }[] = [
-  { label: "Immigration", value: "immigration" },
-  { label: "Climate Change", value: "climate_change" },
-  { label: "Gender Issues", value: "gender_issues" },
-];
-
 // Topics are capped so the relevant-documents sample can guarantee each topic a slot.
 const MAX_TOPICS = 5;
 const DEFAULT_SAMPLE_SIZE = 30;
@@ -82,15 +75,20 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [sampleSize, setSampleSize] = useState(DEFAULT_SAMPLE_SIZE);
 
-  // Topic library: 3 core topics + the project's classifier subtopics (value = id).
-  const topicOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const o of CORE_TOPICS) seen.set(o.value, o.label);
-    for (const classifier of activeProject?.classifiers ?? []) {
-      for (const t of classifier.topics) seen.set(t.topic_id, t.name);
-    }
-    return [...seen].map(([value, label]) => ({ value, label }));
-  }, [activeProject]);
+  // Topic facets from the DB: the 3 core ACTEU topics + subtopics (document-native
+  // db subtopics ∪ the project's classifier subtopics), merged server-side. Same
+  // source as the pipeline search form.
+  const { data: topicFacets } = useQuery({
+    queryKey: ["project-topics", activeProject?.project_id],
+    queryFn: () => api.getProjectTopics(activeProject!.project_id, session?.accessToken),
+    enabled: Boolean(session?.accessToken && activeProject?.project_id),
+    staleTime: Infinity,
+  });
+
+  const topicOptions = useMemo(
+    () => [...(topicFacets?.core_topics ?? []), ...(topicFacets?.subtopics ?? [])],
+    [topicFacets],
+  );
 
   const labelFor = (value: string) =>
     topicOptions.find((o) => o.value === value)?.label ?? value;
