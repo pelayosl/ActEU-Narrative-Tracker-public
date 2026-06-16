@@ -1,0 +1,139 @@
+@startuml
+
+actor "User" as User
+participant ":Search Page\n(Frontend)" as UI
+participant ":PipelineStore\n(Zustand)" as Store
+participant ":API Gateway\n(/topics)" as API
+participant ":ProjectService" as PS
+participant ":ProjectRepository" as PR
+participant ":TopicModellingService" as TMS
+participant ":JobQueueService" as JQS
+participant ":reconciliation_task" as RT
+participant ":LLMClient" as LLM
+participant ":Ollama (LLM)" as Ollama
+participant ":Redis\n(broker + result backend)" as Redis
+
+autonumber
+
+== Preconditions ==
+note over User, UI
+  User is authenticated, a project is active,
+  and topic generation has completed (generated_topics exist,
+  optionally edited/merged in the frontend).
+end note
+
+== Read Current Topics ==
+
+UI -> Store : Read validated list[Topic] (generated, possibly edited)
+Store --> UI : list[Topic]
+UI --> User : Display current topic list
+
+== Main Flow – Dispatch ==
+
+User -> UI : Initiate topic reconciliation
+UI -> Store : Read project_id + current list[Topic]
+Store --> UI : project_id, list[Topic]
+
+UI -> API : POST /topics/reconcile\n{ project_id, topics }
+API -> API : get_current_user (verify bearer token)
+API -> PS : verify_project_owner(project_id, user_id)
+PS -> PR : find_by_id(project_id)
+PR --> PS : Project | None
+alt project missing or not owned
+    PS --> API : raise ProjectNotFound / ProjectAccessDenied
+    API --> UI : 404 / 403
+end
+
+API -> TMS : submit_reconciliation(project_id,\n[t.model_dump() for t in topics])
+TMS -> JQS : dispatch("...reconciliation_task",\n{ project_id, topics })
+JQS -> Redis : send_task (enqueue to broker)
+JQS --> TMS : job_id (AsyncResult.id)
+TMS --> API : job_id
+API --> UI : { job_id }
+
+UI -> Store : topicSubStep = "reconciling"\nStore reconciliationJobId
+UI --> User : Show progress (Reconciling topics with the LLM...)
+
+== SSE Progress Stream ==
+
+UI -> API : GET /jobs/{job_id}/stream (SSE)
+API -> JQS : stream_progress(job_id)
+
+loop Until terminal state (poll every ~1s)
+    JQS -> Redis : get_status -> Celery AsyncResult.state
+    Redis --> JQS : PENDING / PROGRESS
+    JQS --> API : JobStatus { status, progress, result }
+    API --> UI : SSE event (JobStatus JSON)
+    UI --> User : Update progress indicator
+end
+
+== Background Task Execution (Celery worker) ==
+
+Redis -> RT : Worker picks up task
+RT -> LLM : reconcile(list[Topic])
+
+alt Ollama responds
+    LLM -> Ollama : POST reconciliation prompt
+    Ollama --> LLM : grouped topics JSON
+    LLM -> LLM : Validate output, flatten surface ids ->\ngeneration-era origin_topic_ids,\npreserve any dropped topic
+    LLM --> RT : reconciled list[Topic]\n(each with origin_topic_ids)
+else Ollama unavailable / parse error
+    LLM -> Ollama : POST reconciliation prompt
+    Ollama --> LLM : (exception)
+    LLM -> LLM : _fallback — return originals unchanged\n(new topic_ids, origin_topic_ids preserved)
+    LLM --> RT : passthrough list[Topic]
+    note right of LLM
+      LLMClient.reconcile NEVER raises on LLM failure;
+      it silently falls back. There is no LLM_UNAVAILABLE
+      failure path — reconciliation still completes SUCCESS.
+    end note
+end
+
+RT -> PS : update_reconciled_topics(project_id, reconciled)
+PS -> PR : update_reconciled_topics(project_id, reconciled)
+note right of PR
+  $set pending_pipeline.reconciled_topics only.
+  generated_topics and topic_mapping are preserved unchanged.
+end note
+PR --> PS : OK
+PS --> RT : OK
+RT -> Redis : task result =\nReconciliationResponse(topics)
+
+== Completion ==
+
+JQS -> Redis : get_status -> SUCCESS + result { topics }
+JQS --> API : JobStatus { status: SUCCESS, result: { topics } }
+API --> UI : SSE event (final)
+UI -> Store : setReconciledTopics(result.topics)\ntopicSubStep = "reconciled"\n(generated_topics kept for revert)
+Store --> UI : Reconciled topic list ready
+UI --> User : Display reconciled topics\n(name, description, "Fuses: X + Y" from origin_topic_ids)
+
+== Frontend-only Editing (no backend calls) ==
+
+opt User edits / deletes / cancels (all local PipelineStore state)
+    note over UI, Store
+      - Edit reconciled topic name/description -> updateReconciledTopic
+      - Delete reconciled topic -> splitReconciledTopic (re-expands origins)
+      - Cancel -> cancelReconciliation: discard reconciled list,
+        restore generated_topics as the active list.
+      pending_pipeline.reconciled_topics in MongoDB is not modified
+      by these local edits (only the next backend action persists).
+    end note
+end
+
+== Accept / Skip ==
+
+User -> UI : Accept reconciled topics (or "Skip to Labelling")
+UI -> Store : Mark topic step complete\nActive list = reconciled (or generated if skipped)
+Store --> UI : Classifier training step unlocked
+UI --> User : Proceed to classifier training step
+
+== Exception – Task Fails Unexpectedly ==
+
+RT -> Redis : task state = FAILURE (+ error)
+JQS --> API : JobStatus { status: FAILURE }
+API --> UI : SSE event (final)
+UI -> Store : topicSubStep = "generated"
+UI --> User : Notify: reconciliation failed. Please try again.
+
+@enduml

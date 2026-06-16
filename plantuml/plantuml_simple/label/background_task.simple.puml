@@ -1,0 +1,67 @@
+@startuml
+participant ":labelling_task" as LT
+participant ":MutexManager" as MM
+participant ":ProjectService" as PS
+participant ":ProjectRepository" as PR
+participant ":SearchService" as SS
+participant ":DocumentRepository" as DR
+participant ":ClassifierWrapper" as CW
+participant ":Redis\n(broker + result backend)" as Redis
+
+autonumber
+
+== Preconditions ==
+note over LT, Redis
+  Dispatched by ClassificationService.submit_labelling with
+  { project_id, classifier_id, query }. Part of Phase 2 labelling.
+end note
+
+== Background Task Execution (Celery worker) ==
+
+Redis -> LT : Worker picks up task
+LT -> MM : acquire("labelling:project:{project_id}")
+
+alt lock not acquired
+    MM --> LT : false
+    LT -> Redis : task state = FAILURE (LabellingLocked)
+else lock acquired
+    MM --> LT : true
+    LT -> PS : get_classifier(project_id, classifier_id)
+    PS -> PR : find_classifier(project_id, classifier_id)
+    PR --> PS : ClassifierMetadata
+    PS --> LT : ClassifierMetadata (topics, file_path)
+    LT -> PS : get_labelled_doc_ids(project_id, classifier_id)
+    PS -> PR : find_labelled_doc_ids(project_id, classifier_id)
+    PR --> PS : list[doc_id]
+    PS --> LT : set[str] (already-labelled)
+    LT -> CW : load(file_path)
+    CW --> LT : OK
+
+    LT -> SS : search(query)
+    SS -> DR : find(query) + count(query)
+    DR --> SS : list[Document], int
+    SS --> LT : SearchResult
+    LT -> LT : candidate_ids = retrieved doc_ids\nNOT already labelled
+
+    alt no candidates (no matches OR all already labelled) — Alt 6.1
+        LT -> Redis : task result = LabellingResult\n{ total_labelled: 0, topic_summary: {} }
+    else candidates remain
+        LT -> SS : get_documents_by_ids(candidate_ids)
+        SS -> DR : find_by_ids(candidate_ids)
+        DR --> SS : list[Document]
+        SS --> LT : list[Document] (full text)
+        loop For each Document
+            LT -> CW : predict(plain_text)
+            CW --> LT : (topic_id, confidence)
+            note right of LT : Skip if topic_id == OTHER_TOPIC_ID, or not among classifier topics
+        end
+        LT -> LT : Build DocumentProxy entries\n(ProxyLabel.confidence = predicted score)
+        LT -> PS : upsert_document_proxies(project_id, proxies)
+        PS -> PR : upsert_document_proxies(project_id, proxies)
+        PR --> PS : OK
+        PS --> LT : OK
+        LT -> Redis : task result = LabellingResult\n{ total_labelled, topic_summary }
+    end
+    LT -> MM : release (on success or failure)
+end
+@enduml

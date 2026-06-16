@@ -1,0 +1,83 @@
+@startuml
+actor "User" as User
+participant ":Topic Modelling Step\n(Frontend, subStep \"generated\")" as UI
+participant ":PipelineStore\n(Zustand)" as Store
+
+autonumber
+
+== Preconditions ==
+note over User, UI
+  User is authenticated, a project is active, and topic generation
+  has completed (topicSubStep = "generated"). All editing here is
+  frontend-only: nothing is written to the backend until the user
+  triggers reconciliation or training with the current list.
+end note
+
+== Display ==
+
+UI -> Store : Read generatedTopics
+Store --> UI : list[Topic]
+UI --> User : Display numbered topic cards\n("N topics generated", name + description, checkbox per card)
+
+== Optional: Edit Topic (inline) ==
+
+opt User edits a topic
+    User -> UI : Click pencil -> change name and/or description
+    note over UI : Confirm (check) is disabled until BOTH\nname and description are non-empty
+    User -> UI : Confirm edit
+    UI -> Store : updateGeneratedTopic(topic_id, name, description)
+    Store --> UI : Updated generatedTopics
+    UI --> User : Reflect changes inline
+end
+
+== Optional: Delete Topic ==
+
+opt User deletes a topic
+    User -> UI : Click trash icon
+    UI --> User : Confirmation modal\n("\"<name>\" will be removed. This cannot be undone.")
+    alt User confirms
+        User -> UI : Confirm delete
+        UI -> Store : deleteGeneratedTopic(topic_id)
+        Store --> UI : Reduced generatedTopics\n(plain removal — deleting to an empty list is allowed)
+        UI --> User : Reflect updated topic list
+    else User cancels
+        UI --> User : Modal dismissed, no change
+    end
+end
+
+== Optional: Merge Topics (frontend-only) ==
+
+opt User merges topics
+    User -> UI : Select topics via checkboxes
+    note over UI : "Merge Selected" is disabled until >= 2 are checked
+    User -> UI : Open Merge dialog
+    UI --> User : Dialog pre-filled\n(name = constituents joined by " + ",\ndescription = first selected topic's description)
+    note over UI : "Merge Topics" is disabled until BOTH\nname and description are non-empty
+    alt User confirms
+        User -> UI : Provide/adjust name + description, confirm
+        UI -> Store : mergeGeneratedTopics(selected_ids, name, description)
+        note right of Store
+          Creates a new Topic with a fresh UUID and
+          origin_topic_ids = union of the constituents'
+          generation ids (origin_topic_ids, or own id if none).
+          The originals are removed; the merged topic is appended.
+        end note
+        Store --> UI : Updated generatedTopics
+        UI --> User : Display list with the merged topic in place
+    else User cancels
+        UI --> User : Dialog dismissed, no change
+    end
+end
+
+== Proceed (no backend call here) ==
+
+note over User, UI
+  There is no separate "accept / validate" action. From step 2b the
+  user proceeds via one of two buttons, BOTH disabled while the list
+  is empty (the only "at least one topic" enforcement):
+    - "Reconcile Topics"   -> dispatches reconciliation (see UC 1.4)
+    - "Skip to Labelling -> " -> setStep("label") with the current list
+  The current (edited/merged) generatedTopics is the list carried forward.
+end note
+
+@enduml

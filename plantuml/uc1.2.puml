@@ -1,0 +1,121 @@
+@startuml
+actor "User" as User
+participant ":Search Page\n(Frontend)" as UI
+participant ":PipelineStore\n(Zustand)" as Store
+participant ":API Gateway\n(/topics)" as API
+participant ":ProjectService" as PS
+participant ":ProjectRepository" as PR
+participant ":TopicModellingService" as TMS
+participant ":JobQueueService" as JQS
+participant ":topic_generation_task" as TGT
+participant ":SearchService" as SS
+participant ":DocumentRepository" as DR
+participant ":Ollama (LLM)" as LLM
+participant ":Redis\n(broker + result backend)" as Redis
+
+autonumber
+
+== Preconditions ==
+note over User, UI
+  User is authenticated, a project is active,
+  and a successful search has been performed this session.
+end note
+
+== Main Flow – Dispatch ==
+
+User -> UI : Initiate topic modelling
+UI -> Store : Read doc_ids + project_id from pipeline state
+Store --> UI : doc_ids, project_id
+
+UI -> API : POST /topics/generate\n{ project_id, doc_ids }
+API -> API : get_current_user (verify bearer token)
+API -> PS : verify_project_owner(project_id, user_id)
+PS -> PR : find_by_id(project_id)
+PR --> PS : Project | None
+alt project missing or not owned
+    PS --> API : raise ProjectNotFound / ProjectAccessDenied
+    API --> UI : 404 / 403
+end
+
+API -> TMS : submit_generation(project_id, doc_ids)
+TMS -> JQS : dispatch("...topic_generation_task",\n{ project_id, doc_ids })
+JQS -> Redis : send_task (enqueue to broker)
+JQS --> TMS : job_id (AsyncResult.id)
+TMS --> API : job_id
+API --> UI : 202-style { job_id }
+
+UI -> Store : topicSubStep = "generating"\nStore generationJobId
+UI --> User : Show progress (Running BERTopic...)
+
+== SSE Progress Stream ==
+
+UI -> API : GET /jobs/{job_id}/stream (SSE)
+API -> JQS : stream_progress(job_id)
+
+loop Until terminal state (poll every ~1s)
+    JQS -> Redis : get_status -> Celery AsyncResult.state
+    Redis --> JQS : PENDING / PROGRESS { progress, step }
+    JQS --> API : JobStatus { status, progress, result }
+    API --> UI : SSE event (JobStatus JSON)
+    UI --> User : Update progress indicator
+end
+
+== Background Task Execution (Celery worker) ==
+
+Redis -> TGT : Worker picks up task
+TGT -> SS : get_documents_by_ids(doc_ids)
+SS -> DR : find_by_ids(doc_ids)
+DR --> SS : list[Document]
+SS --> TGT : list[Document] (full text)
+
+alt fewer than MIN_DOCUMENTS_FOR_TOPICS (10) usable docs
+    TGT -> PS : set_pending_pipeline(empty topics + empty mapping)
+    PS -> PR : set_pending_pipeline(project_id, pipeline)
+    PR --> PS : OK
+    TGT -> Redis : task result = GenerateTopicsResponse(topics=[])
+else enough documents
+    TGT -> TGT : Compute embeddings (embeddinggemma-300m)\n+ BERTopic fit_transform (UMAP + HDBSCAN)
+
+    loop For each cluster (inside BERTopic representation hook)
+        TGT -> LLM : POST keywords + top 4 rep docs\n(c-TF-IDF based prompt)
+        alt LLM responds
+            LLM --> TGT : { name, description }
+        else LLM call fails (per-topic)
+            LLM --> TGT : (exception)
+            TGT -> TGT : Silent fallback —\nuse top keyword as name
+        end
+        TGT -> Redis : update_state PROGRESS\n(labelling topic n/total)
+    end
+
+    TGT -> TGT : Group doc_ids by assigned topic\n(outlier cluster -1 stored under OTHER_TOPIC_ID)
+    TGT -> PS : set_pending_pipeline(PendingPipeline {\ngenerated_topics, topic_mapping,\ngeneration_job_id, reconciled_topics=[] })
+    PS -> PR : set_pending_pipeline(project_id, pipeline)
+    note right of PR : $set pending_pipeline\n(overwrites any previous one)
+    PR --> PS : OK
+    PS --> TGT : OK
+    TGT -> Redis : task result =\nGenerateTopicsResponse(topics)
+end
+
+== Completion ==
+
+JQS -> Redis : get_status -> SUCCESS\n+ result { topics }
+JQS --> API : JobStatus { status: SUCCESS, result: { topics } }
+API --> UI : SSE event (final)
+
+alt result.topics not empty
+    UI -> Store : setGeneratedTopics(result.topics)\ntopicSubStep = "generated"
+    Store --> UI : Editing / reconciliation steps available
+    UI --> User : Display topics (name + description per topic)
+else result.topics empty (Alt 2.1)
+    UI -> Store : topicSubStep = "generated" (empty list)
+    UI --> User : "No topics were generated. Try a broader search."
+end
+
+== Exception – Task Fails Unexpectedly ==
+
+TGT -> Redis : task state = FAILURE (+ error)
+JQS --> API : JobStatus { status: FAILURE }
+API --> UI : SSE event (final)
+UI --> User : Notify: topic generation failed.\nRetry from the search step.
+
+@enduml
