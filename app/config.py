@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "university-api" # Stored in .env
     OLLAMA_MODEL: str = "gemma3:27b"
     HF_TOKEN: str = "changeme"
+    LLM_API_KEY: str = "changeme"
 
     class Config:
         env_file = ".env"

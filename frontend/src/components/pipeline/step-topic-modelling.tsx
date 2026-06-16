@@ -45,6 +45,8 @@ export function StepTopicModelling() {
   const [selected, setSelected] = useState<string[]>([]);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Informational (non-error) message, e.g. when the LLM was unavailable.
+  const [notice, setNotice] = useState<string | null>(null);
 
   const genJob = useJob(subStep === "generating" ? generationJobId : null);
   const recJob = useJob(subStep === "reconciling" ? reconciliationJobId : null);
@@ -57,6 +59,12 @@ export function StepTopicModelling() {
       setGeneratedTopics(topics);
       setGenerationJobId(null);
       setTopicSubStep("generated");
+      // Topics still load, but with raw BERTopic labels — inform the user.
+      setNotice(
+        genJob.result.llm_available === false
+          ? "LLM unavailable for producing comprehensible labels, using standard BERTopic labels"
+          : null,
+      );
     } else if (genJob.status === "FAILURE") {
       setError("Topic generation failed. Please try again from the search step.");
       setGenerationJobId(null);
@@ -68,6 +76,14 @@ export function StepTopicModelling() {
   useEffect(() => {
     if (subStep !== "reconciling" || !recJob) return;
     if (recJob.status === "SUCCESS") {
+      if (recJob.result.llm_available === false) {
+        // Reconciliation did not run — stay at the editing step so the user can
+        // retry or skip; do not advance to the reconciled view.
+        setNotice("LLM unavailable: please try again later or skip reconciliation");
+        setReconciliationJobId(null);
+        setTopicSubStep("generated");
+        return;
+      }
       const topics = (recJob.result.topics as Topic[]) ?? [];
       setReconciledTopics(topics);
       setReconciliationJobId(null);
@@ -97,6 +113,7 @@ export function StepTopicModelling() {
   async function handleReconcile() {
     if (!activeProject) return;
     setError(null);
+    setNotice(null);
     try {
       const { job_id } = await api.reconcileTopics(
         activeProject.project_id,
@@ -148,6 +165,15 @@ export function StepTopicModelling() {
         >
           <span>{error}</span>
           <button onClick={() => setError(null)} aria-label="Dismiss" className="font-medium">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {notice && (
+        <div className="flex items-center justify-between rounded-md border border-amber-500/30 bg-amber-50 p-3 text-sm text-amber-800">
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} aria-label="Dismiss" className="font-medium">
             ✕
           </button>
         </div>

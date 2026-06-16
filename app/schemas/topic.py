@@ -32,7 +32,11 @@ class ReconciliationRequest(BaseModel):
 
 class GenerateTopicsResponse(BaseModel):
     topics: list[Topic]
+    # False when the LLM was unavailable and topics fell back to raw BERTopic labels.
+    llm_available: bool = True
 
 
 class ReconciliationResponse(BaseModel):
     topics: list[Topic]
+    # False when the LLM was unavailable; reconciliation did not run and topics is empty.
+    llm_available: bool = True

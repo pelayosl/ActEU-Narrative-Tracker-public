@@ -12,7 +12,10 @@ class LLMClient:
     """Ollama wrapper for topic reconciliation. Lives in services (not infrastructure)
     because it encapsulates prompt engineering, response parsing, and fallback logic."""
 
-    def reconcile(self, topics: list[Topic]) -> list[Topic]:
+    def reconcile(self, topics: list[Topic]) -> tuple[list[Topic], bool]:
+        """Returns (reconciled_topics, llm_available). When the LLM is unavailable the
+        flag is False and the second element is the unchanged fallback list — the
+        caller decides whether to use or discard it."""
         valid_ids = {t.topic_id for t in topics}
         topics_payload = [
             {"id": t.topic_id, "name": t.name, "description": t.description}
@@ -35,14 +38,29 @@ class LLMClient:
         try:
             response = httpx.post(
                 settings.OLLAMA_URL,
-                json={"model": settings.OLLAMA_MODEL, "prompt": prompt, "stream": False},
-                timeout=120.0,
+                headers={
+                    "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": settings.OLLAMA_MODEL,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                },
+                timeout=120,
             )
-            raw = response.json()["response"]
+            data = response.json()
+            choices = data.get("choices") or []
+            if not choices or not isinstance(choices, list):
+                raise ValueError(f"Unexpected LLM response payload: {data}")
+            raw = choices[0].get("message", {}).get("content")
+            if raw is None:
+                raise ValueError(f"Missing assistant content in LLM response: {data}")
             parsed = _extract_json(raw)
-            return _build_topics(parsed, valid_ids, topics)
+            return _build_topics(parsed, valid_ids, topics), True
         except Exception:
-            return _fallback(topics)
+            return _fallback(topics), False
 
 
 def _extract_json(text: str) -> list[dict]:
@@ -112,7 +130,7 @@ def _fallback(topics: list[Topic]) -> list[Topic]:
     """Return original topics unchanged if the LLM call fails entirely."""
     return [
         Topic(
-            topic_id=str(uuid.uuid4()),
+            topic_id=t.topic_id,
             name=t.name,
             description=t.description,
             origin_topic_ids=_generation_ids(t),

@@ -14,9 +14,13 @@ def reconciliation_task(project_id: str, topics: list[dict]) -> dict:
 
 async def _run(project_id: str, topics: list[dict]) -> dict:
     parsed = [Topic(**t) for t in topics]
-    reconciled = LLMClient().reconcile(parsed)
+    reconciled, llm_available = LLMClient().reconcile(parsed)
+
+    # When the LLM is unavailable, do NOT persist the fallback.
+    if not llm_available:
+        return ReconciliationResponse(topics=[], llm_available=False).model_dump()
 
     async with project_service_context() as project_service:
         await project_service.update_reconciled_topics(project_id, reconciled)
 
-    return ReconciliationResponse(topics=reconciled).model_dump()
+    return ReconciliationResponse(topics=reconciled, llm_available=True).model_dump()
