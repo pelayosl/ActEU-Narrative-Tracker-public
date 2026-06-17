@@ -1,11 +1,11 @@
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from app.schemas.topic import Topic
 
 
 class TopicRepository:
 
-    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+    def __init__(self, db: AsyncDatabase) -> None:
         self._collection = db["topics"]
 
     async def find_by_id(self, topic_id: str) -> Topic | None:

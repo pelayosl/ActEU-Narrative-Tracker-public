@@ -1,13 +1,13 @@
 from bson import ObjectId
 from bson.errors import InvalidId
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from app.config import settings
 from app.schemas.search import SearchQuery
 
 
 class DocumentRepository:
-    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+    def __init__(self, db: AsyncDatabase) -> None:
         self._collection = db["documents"]
 
     def _build_filter(
@@ -168,7 +168,7 @@ class DocumentRepository:
             },
             {"$sort": {"_id": 1}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [{"date": doc["_id"], "count": doc["count"]} async for doc in cursor]
 
     async def topic_presence_by_language(
@@ -190,7 +190,7 @@ class DocumentRepository:
             {"$group": {"_id": "$language", "count": {"$sum": 1}}},
             {"$sort": {"count": -1, "_id": 1}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [
             {"language": doc["_id"], "count": doc["count"]} async for doc in cursor
         ]
@@ -214,7 +214,7 @@ class DocumentRepository:
             {"$group": {"_id": "$platform", "count": {"$sum": 1}}},
             {"$sort": {"count": -1, "_id": 1}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [
             {"platform": doc["_id"], "count": doc["count"]} async for doc in cursor
         ]
@@ -238,7 +238,7 @@ class DocumentRepository:
             {"$match": match},
             {"$project": {"_id": 0, "entities": "$named_entities.text"}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         result: list[list[str]] = []
         async for doc in cursor:
             entities = doc.get("entities") or []
@@ -345,7 +345,7 @@ class DocumentRepository:
             {"$match": {"_relevance": {"$ne": None}}}, # Remove docs with None relevance
             {"$group": {"_id": None, "mean": {"$avg": "$_relevance"}}}, # Compute average relevance
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         async for doc in cursor:
             return doc.get("mean")
         return None
@@ -391,7 +391,7 @@ class DocumentRepository:
                 }
             },
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [
             {
                 "doc_id": str(doc["_id"]),

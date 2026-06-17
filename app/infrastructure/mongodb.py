@@ -1,6 +1,6 @@
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from app.config import settings
 
-client = AsyncIOMotorClient(settings.MONGODB_URL)
+client = AsyncMongoClient(settings.MONGODB_URL)
 db = client[settings.MONGODB_DB]

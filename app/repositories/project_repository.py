@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from app.schemas.classification import ClassifierMetadata, DocumentProxy
 from app.schemas.project import PendingPipeline, Project
@@ -9,7 +9,7 @@ from pymongo import UpdateOne
 
 
 class ProjectRepository:
-    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+    def __init__(self, db: AsyncDatabase) -> None:
         self._collection = db["projects"]
 
     async def save(self, project: Project) -> None:
