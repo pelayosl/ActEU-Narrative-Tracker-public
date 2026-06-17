@@ -41,7 +41,7 @@ def transform_telegram(raw: dict) -> dict | None:
         "platform": "telegram",
         "country": country,
         "language": language,
-        "published_time": raw.get("published_time"),
+        "published_time": raw.get("published_time") or raw.get("modified_time"),
         "author": author,
         "acteu_topic": extract_acteu_topic(annotations),
         "subtopics": extract_acteu_subtopic(annotations),

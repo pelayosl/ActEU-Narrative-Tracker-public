@@ -1,6 +1,6 @@
 """
 MongoDB loader script — ActEU Narrative Tracker
-Reads transformed ndjson files organised by platform/country and bulk-inserts
+Reads transformed ndjson files organised by platform and language and bulk-inserts
 them into MongoDB. Also seeds the topics collection with the three core topics,
 an admin user, and a starter project.
 
@@ -170,7 +170,7 @@ def load_platform_dir(platform_dir: Path, collection) -> tuple[int, int]:
 def create_indexes(db) -> None:
     print("\nCreating indexes...")
     db.documents.create_index("platform")
-    db.documents.create_index("country")
+    db.documents.create_index("language")
     db.documents.create_index("published_time")
     db.documents.create_index("acteu_topic.label")
     db.topics.create_index("topic_id", unique=True)
