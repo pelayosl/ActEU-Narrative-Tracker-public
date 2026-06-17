@@ -18,7 +18,13 @@ export function Sidebar() {
   return (
     <aside className="flex w-60 flex-col border-r border-border bg-white">
       <div className="flex items-center justify-between p-4">
-        <span className="text-lg font-semibold text-acteu-red">ActEU</span>
+        <Link
+          href="/home"
+          className="text-lg font-semibold text-acteu-red transition-opacity hover:opacity-80"
+          aria-label="Go to home page"
+        >
+          ActEU
+        </Link>
         <ProfileMenu />
       </div>
       <nav className="flex-1 space-y-1 p-2">
