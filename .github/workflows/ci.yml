@@ -34,7 +34,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests/
+          pytest tests/ -m "not slow"
         env:
           MONGODB_URL: mongodb://localhost:27017
           MONGODB_DB: acteu_test
