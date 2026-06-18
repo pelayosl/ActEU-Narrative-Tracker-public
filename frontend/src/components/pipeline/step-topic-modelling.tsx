@@ -180,9 +180,19 @@ export function StepTopicModelling() {
       )}
 
       {!isReconciled && (
-        <div className="rounded-md bg-bg px-3 py-2 text-sm text-ink">
-          <strong>{topics.length} topics</strong> generated from BERTopic analysis
-        </div>
+        <>
+          <div className="rounded-md bg-bg px-3 py-2 text-sm text-ink">
+            <strong>{topics.length} topics</strong> generated from BERTopic analysis
+          </div>
+          <Button
+            variant="outline"
+            disabled={selected.length < 2}
+            onClick={() => setMergeOpen(true)}
+          >
+            <GitMerge className="mr-1.5 h-4 w-4" />
+            Merge Selected ({selected.length})
+          </Button>
+        </>
       )}
 
       {topics.length === 0 ? (
@@ -224,20 +234,14 @@ export function StepTopicModelling() {
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            disabled={selected.length < 2}
-            onClick={() => setMergeOpen(true)}
-          >
-            <GitMerge className="mr-1.5 h-4 w-4" />
-            Merge Selected ({selected.length})
-          </Button>
-          <div className="flex-1" />
           <Button disabled={topics.length === 0} onClick={handleReconcile}>
             Reconcile Topics
           </Button>
           <Button variant="outline" disabled={topics.length === 0} onClick={() => setStep("label")}>
             Skip to Labelling →
+          </Button>
+          <Button variant="ghost" onClick={() => setStep("search")}>
+            Cancel
           </Button>
         </div>
       )}
