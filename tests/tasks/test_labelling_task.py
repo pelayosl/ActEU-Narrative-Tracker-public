@@ -1,16 +1,12 @@
-import sys
-import types
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-# FastText is an NLP-only dependency (requirements-nlp.txt) absent from the CI/dev
-# environment, but `labelling_task` imports ClassifierWrapper at module load. The
-# wrapper is fully mocked in these tests, so a bare stub is enough to import.
-sys.modules.setdefault("fasttext", types.ModuleType("fasttext"))
-
+# Note: `labelling_task` imports ClassifierWrapper -> `import fasttext` at module
+# load. When FastText is not installed, tests/conftest.py inserts a stub so this
+# import succeeds (the wrapper is fully mocked in these tests).
 from app.exceptions import LabellingLocked
 from app.schemas.classification import ClassifierMetadata
 from app.schemas.search import DocumentSummary, SearchResult
