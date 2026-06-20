@@ -155,7 +155,7 @@ class VisualisationService:
         self, query: VisualisationQuery, proxy_confidence: dict[str, dict[str, float]]
     ) -> list[DocumentPreview]:
         """Sample up to `query.sample_size` documents across all query topics. Each
-        topic gets a number of slots proportional to its mean classifier confidence
+        topic gets a number of slots proportional to how many documents it matches
         (minimum 1 each) and shows its own highest-confidence documents. A document
         representative of several query topics may appear once under each of them (so a
         narrow topic that overlaps a broader one still gets its own examples). Slots a
@@ -167,20 +167,23 @@ class VisualisationService:
 
         weights: dict[str, float] = {}
         for topic in query.topics:
-            mean = await self._document_repo.mean_topic_confidence(
+            count = await self._document_repo.count_topic_documents(
                 topic,
                 query.date_from,
                 query.date_to,
                 query.languages,
                 query.platforms,
-                proxy_confidence.get(topic),
+                list(proxy_confidence.get(topic) or {}),
             )
-            weights[topic] = mean if mean is not None else 0.0
+            weights[topic] = float(count)
 
         slots = self._apportion_slots(weights, query.sample_size)
 
         # Fetch a deep candidate pool per topic (already sorted by relevance). The
         # final list is at most sample_size docs, so no topic can contribute more.
+        # Each pool is reordered to interleave platforms, so a topic's slots are
+        # filled with a varied platform mix rather than whichever platform happens
+        # to dominate its highest-confidence documents.
         pools: dict[str, list[dict]] = {}
         for topic in query.topics:
             docs = await self._document_repo.relevant_documents(
@@ -192,7 +195,9 @@ class VisualisationService:
                 proxy_confidence.get(topic),
                 limit=query.sample_size,
             )
-            pools[topic] = [{**doc, "topic": topic} for doc in docs]
+            pools[topic] = self._diversify_by_platform(
+                [{**doc, "topic": topic} for doc in docs]
+            )
 
         # Pass 1: each topic shows its top documents up to its slot count.
         selected: list[dict] = []
@@ -232,7 +237,7 @@ class VisualisationService:
     @staticmethod
     def _apportion_slots(weights: dict[str, float], sample_size: int) -> dict[str, int]:
         """Split `sample_size` document slots across topics: one guaranteed slot each,
-        the remainder distributed proportionally to each topic's weight (mean confidence)
+        the remainder distributed proportionally to each topic's weight (document count)
         using the largest-remainder method so the parts sum exactly to `sample_size`.
 
         Assumes `sample_size >= len(weights)`"""
@@ -262,6 +267,37 @@ class VisualisationService:
         for t in order[:leftover]:
             slots[t] += 1
         return slots
+
+    @staticmethod
+    def _diversify_by_platform(docs: list[dict]) -> list[dict]:
+        """Reorder a relevance-sorted document list so platforms are interleaved.
+
+        Documents are grouped by platform (each group keeps its relevance order) and
+        then drained round-robin, one per platform per round, visiting platforms in
+        order of their most relevant document. The head of the list stays
+        high-relevance, but no single platform fills the early slots while other
+        platforms still have documents to offer. A single-platform list is returned
+        unchanged."""
+        if not docs:
+            return docs
+
+        groups: dict[str, list[dict]] = {}
+        for doc in docs:
+            groups.setdefault(doc.get("platform") or "", []).append(doc)
+        if len(groups) == 1:
+            return docs
+
+        queues = sorted(
+            groups.values(),
+            key=lambda q: VisualisationService._relevance_rank(q[0]),
+            reverse=True,
+        )
+        result: list[dict] = []
+        while any(queues):
+            for queue in queues:
+                if queue:
+                    result.append(queue.pop(0))
+        return result
 
     @staticmethod
     def _relevance_rank(doc: dict) -> float:

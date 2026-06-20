@@ -350,6 +350,24 @@ class DocumentRepository:
             return doc.get("mean")
         return None
 
+    async def count_topic_documents(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+    ) -> int:
+        """Number of documents matching a topic under the visualisation constraints.
+
+        Counts every document that carries the topic (core, db-subtopic or project
+        proxy), regardless of confidence. Returns 0 when nothing matches."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+        )
+        return await self._collection.count_documents(match)
+
     async def relevant_documents(
         self,
         topic: str,
