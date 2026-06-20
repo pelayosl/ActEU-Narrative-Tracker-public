@@ -1,0 +1,155 @@
+@startuml visualisation_subsystem
+' =====================================================================
+'  Visualisation Subsystem
+'  Covers: dashboard data assembly, dual-source topic resolution
+'  (core ∪ db-subtopic ∪ project-proxy), PageRank-based entity
+'  ranking, confidence-weighted document slot apportionment, and
+'  temporal / language / platform breakdown aggregations.
+' =====================================================================
+
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+skinparam class {
+    BackgroundColor<<external>> #F0F0F0
+    BorderColor<<external>>     #AAAAAA
+    FontColor<<external>>       #666666
+}
+
+' =====================================================================
+'  EXTERNAL DEPENDENCIES
+' =====================================================================
+package "External" {
+    class DocumentRepository <<external>> {
+        +topic_presence_over_time(...) : list<dict>
+        +topic_presence_by_language(...) : list<dict>
+        +topic_presence_by_platform(...) : list<dict>
+        +entities_for_topic(...) : list<list<str>>
+        +relevant_documents(...) : list<dict>
+        +mean_topic_confidence(...) : float
+    }
+
+    class ProjectService <<external>> {
+        +get_proxy_confidence_by_topics(project_id, topics) : dict
+        +verify_project_owner(project_id, user_id) : None
+    }
+}
+
+' =====================================================================
+'  SERVICE + UTILITY MODULE
+' =====================================================================
+package "app.services" {
+    class VisualisationService {
+        -_document_repo : DocumentRepository
+        -_project_service : ProjectService
+        +load_dashboard(query : VisualisationQuery, project_id : str) : Dashboard
+        -_resolve_proxy_confidence(topics : list, project_id : str) : dict
+        -_apportion_slots(confidences : dict, sample_size : int) : dict
+        -_topic_evolution(query, proxy_confidence) : list<TopicTimeSeries>
+        -_topics_by_language(query, proxy_confidence) : list<TopicLanguageBreakdown>
+        -_topics_by_platform(query, proxy_confidence) : list<TopicPlatformBreakdown>
+        -_top_entities(query, proxy_confidence) : list<TopicEntities>
+        -_relevant_documents(query, proxy_confidence) : list<DocumentPreview>
+    }
+
+    class PageRank <<module>> {
+        +top_entities(doc_entity_lists : list<list<str>>, limit : int) : list<tuple<str, float>>
+    }
+}
+
+' =====================================================================
+'  SCHEMAS
+' =====================================================================
+package "app.schemas.visualisation" {
+    class VisualisationQuery {
+        +topics : list<str>
+        +date_from : datetime
+        +date_to : datetime
+        +languages : list<str>
+        +platforms : list<str>
+        +sample_size : int
+    }
+
+    class Dashboard
+
+    class TopicTimeSeries {
+        +topic : str
+    }
+    class TimePoint {
+        +date : str
+        +count : int
+    }
+
+    class TopicLanguageBreakdown {
+        +topic : str
+    }
+    class LanguageCount {
+        +language : str
+        +count : int
+    }
+
+    class TopicPlatformBreakdown {
+        +topic : str
+    }
+    class PlatformCount {
+        +platform : str
+        +count : int
+    }
+
+    class TopicEntities {
+        +topic : str
+    }
+    class EntityScore {
+        +entity : str
+        +score : float
+    }
+
+    class DocumentPreview {
+        +doc_id : str
+        +platform : str
+        +language : str
+        +date : datetime
+        +topic : str
+        +relevance_score : float
+        +excerpt : str
+    }
+}
+
+' =====================================================================
+'  RELATIONSHIPS
+' =====================================================================
+
+' --- structural (solid) ---
+VisualisationService --> DocumentRepository
+VisualisationService --> ProjectService
+
+' --- service -> utility ---
+VisualisationService ..> PageRank
+
+' --- service -> schemas ---
+VisualisationService ..> VisualisationQuery
+VisualisationService ..> Dashboard
+VisualisationService ..> TopicTimeSeries
+VisualisationService ..> TimePoint
+VisualisationService ..> TopicLanguageBreakdown
+VisualisationService ..> LanguageCount
+VisualisationService ..> TopicPlatformBreakdown
+VisualisationService ..> PlatformCount
+VisualisationService ..> TopicEntities
+VisualisationService ..> EntityScore
+VisualisationService ..> DocumentPreview
+
+' --- schema composition ---
+Dashboard *-- "0..*" TopicTimeSeries
+Dashboard *-- "0..*" TopicLanguageBreakdown
+Dashboard *-- "0..*" TopicPlatformBreakdown
+Dashboard *-- "0..*" TopicEntities
+Dashboard *-- "0..*" DocumentPreview
+TopicTimeSeries *-- "0..*" TimePoint
+TopicLanguageBreakdown *-- "0..*" LanguageCount
+TopicPlatformBreakdown *-- "0..*" PlatformCount
+TopicEntities *-- "0..*" EntityScore
+
+@enduml

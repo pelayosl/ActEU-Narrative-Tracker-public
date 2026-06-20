@@ -1,0 +1,186 @@
+@startuml topic_modelling_subsystem
+' =====================================================================
+'  Topic Modelling Subsystem
+'  Covers: BERTopic clustering, in-process LLM cluster labelling via
+'  OllamaRepresentation, LLM-driven topic reconciliation, and the
+'  transient pending_pipeline persistence model.
+' =====================================================================
+
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+skinparam class {
+    BackgroundColor<<external>> #F0F0F0
+    BorderColor<<external>>     #AAAAAA
+    FontColor<<external>>       #666666
+}
+
+' =====================================================================
+'  EXTERNAL DEPENDENCIES
+' =====================================================================
+package "External" {
+    class JobQueueService <<external>> {
+        +dispatch(task_name, kwargs) : str
+    }
+
+    class SearchService <<external>> {
+        +get_documents_by_ids(doc_ids) : list<Document>
+    }
+
+    class ProjectService <<external>> {
+        +set_pending_pipeline(project_id, pipeline) : None
+        +update_reconciled_topics(project_id, topics) : None
+    }
+
+    class Settings <<external>> {
+        +OLLAMA_URL : str
+        +OLLAMA_MODEL : str
+        +LLM_API_KEY : str
+        +HF_TOKEN : str
+    }
+
+    class CeleryApp <<external>> {
+        +celery_app : Celery
+    }
+
+    class MongoDB <<external>> {
+        +db : AsyncIOMotorDatabase
+    }
+}
+
+' =====================================================================
+'  INFRASTRUCTURE (BERTopic extension)
+' =====================================================================
+package "app.tasks (BERTopic extension)" {
+    class BaseRepresentation <<framework>>
+
+    class OllamaRepresentation {
+        -_labels : dict<int, tuple>
+        -_task : Task
+        -_topic_count_ref : list
+        -_labelled : int
+        +KEYWORD_LIMIT : int
+        +extract_topics(model, documents, c_tf_idf, topics) : dict
+    }
+
+    BaseRepresentation <|-- OllamaRepresentation
+}
+
+' =====================================================================
+'  SERVICE
+' =====================================================================
+package "app.services" {
+    class TopicModellingService {
+        -_job_queue : JobQueueService
+        +submit_generation(project_id : str, doc_ids : list<str>) : str
+        +submit_reconciliation(project_id : str, topics : list<Topic>) : str
+    }
+
+    class LLMClient {
+        +reconcile(topics : list<Topic>) : tuple<list<Topic>, bool>
+    }
+}
+
+' =====================================================================
+'  TASKS
+' =====================================================================
+package "app.tasks" {
+    class TaskContext <<module>> {
+        +search_service_context() : SearchService
+        +project_service_context() : ProjectService
+    }
+
+    class TopicGenerationTask <<celery_task>> {
+        +topic_generation_task(project_id : str, doc_ids : list<str>) : dict
+    }
+
+    class ReconciliationTask <<celery_task>> {
+        +reconciliation_task(project_id : str, topics : list<Topic>) : dict
+    }
+}
+
+' =====================================================================
+'  SCHEMAS
+' =====================================================================
+package "app.schemas.topic" {
+    class Topic {
+        +topic_id : str
+        +name : str
+        +description : str
+        +origin_topic_ids : list<str>
+        +core_topic : str
+    }
+
+    class GenerateTopicsRequest {
+        +project_id : str
+        +doc_ids : list<str>
+    }
+
+    class ReconciliationRequest {
+        +project_id : str
+    }
+
+    class GenerateTopicsResponse {
+        +llm_available : bool
+    }
+
+    class ReconciliationResponse {
+        +llm_available : bool
+    }
+
+    class PendingPipeline {
+        +generation_job_id : str
+        +topic_mapping : dict<str, list<str>>
+        +created_at : datetime
+        +classifier_id : str
+    }
+}
+
+' =====================================================================
+'  RELATIONSHIPS
+' =====================================================================
+
+' --- structural (solid) ---
+TopicModellingService --> JobQueueService
+
+' --- service -> tasks (runtime dispatch by name via JobQueueService, NOT an import) ---
+TopicModellingService ..> TopicGenerationTask : «dispatches»
+TopicModellingService ..> ReconciliationTask : «dispatches»
+
+' --- service -> schemas ---
+TopicModellingService ..> Topic
+
+LLMClient ..> Topic
+LLMClient ..> Settings
+
+OllamaRepresentation ..> Settings
+
+' --- tasks -> TaskContext (service resolution) ---
+TopicGenerationTask ..> TaskContext
+ReconciliationTask ..> TaskContext
+
+TaskContext ..> SearchService
+TaskContext ..> ProjectService
+TaskContext ..> MongoDB
+
+' --- tasks -> services (direct runtime dependencies) ---
+TopicGenerationTask ..> SearchService
+TopicGenerationTask ..> ProjectService
+ReconciliationTask ..> LLMClient
+ReconciliationTask ..> ProjectService
+
+' --- tasks -> infrastructure / helpers ---
+TopicGenerationTask ..> OllamaRepresentation
+TopicGenerationTask ..> PendingPipeline
+TopicGenerationTask ..> CeleryApp
+ReconciliationTask ..> CeleryApp
+
+' --- schema composition ---
+ReconciliationRequest *-- "0..*" Topic
+GenerateTopicsResponse *-- "0..*" Topic
+ReconciliationResponse *-- "0..*" Topic
+PendingPipeline *-- "0..*" Topic
+
+@enduml

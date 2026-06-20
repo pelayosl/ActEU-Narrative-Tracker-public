@@ -4,6 +4,8 @@
 '  Layered architecture: API (Routers) -> Services -> Repositories
 '                        + Infrastructure adapters + Celery Tasks
 '  Pydantic schemas (DTOs) shown in their own package.
+'  Solid line  = Association (structural attribute reference)
+'  Dashed line = Dependency  (uses via method param / local variable)
 ' =====================================================================
 
 skinparam linetype ortho
@@ -30,12 +32,13 @@ package "app" {
         +CLASSIFIER_DIR : str
         +OLLAMA_URL : str
         +OLLAMA_MODEL : str
+        +LLM_API_KEY : str
         +HF_TOKEN : str
     }
 }
 
 ' =====================================================================
-'  API LAYER — Routers (each API module modelled as an APIRouter subclass)
+'  API LAYER — Routers
 ' =====================================================================
 package "app.api" {
     class APIRouter <<framework>>
@@ -50,12 +53,15 @@ package "app.api" {
         +list_projects(service, user) : list<Project>
         +get_project(project_id, service, user) : Project
         +delete_project(project_id, service, user) : None
-        +get_available_topics(project_id, service, user) : list<Topic>
+        +get_available_topics(project_id, service, user) : SearchTopics
+        +download_classifier(project_id, classifier_id, service, user) : FileResponse
+        +delete_classifier(project_id, classifier_id, service, user) : None
     }
 
     class APIRouterSearch {
         +search(query, service, project_service, user, project_id) : SearchResult
         +get_documents_by_ids(doc_ids, service, _user) : list<dict>
+        +get_languages(service, _user) : list<str>
     }
 
     class APIRouterTopics {
@@ -120,7 +126,8 @@ package "app.services" {
     class SearchService {
         -_document_repo : DocumentRepository
         +search(query, proxy_doc_ids) : SearchResult
-        +get_documents_by_ids(doc_ids) : list<dict>
+        +get_documents_by_ids(doc_ids) : list<Document>
+        +get_available_languages() : list<str>
         -_matched_subtopic_labels(doc, query) : list<str>
         -_to_summary(doc, query) : DocumentSummary
     }
@@ -134,10 +141,11 @@ package "app.services" {
         +delete_project(project_id) : None
         +save_classifier(project_id, classifier) : None
         +get_classifier(project_id, classifier_id) : ClassifierMetadata
-        +get_available_topics(project_id) : list<Topic>
+        +delete_classifier(project_id, classifier_id) : None
+        +get_available_topics(project_id) : SearchTopics
         +verify_project_owner(project_id, user_id) : None
-        +filter_proxies_by_subtopics(...) : dict
-        +get_proxy_doc_ids_by_topics(...) : dict
+        +filter_proxies_by_subtopics(project_id, subtopics, threshold) : dict
+        +get_proxy_confidence_by_topics(project_id, topics) : dict
         +upsert_document_proxies(project_id, proxies) : None
         +set_pending_pipeline(project_id, pipeline) : None
         +stamp_pipeline_classifier(project_id, classifier_id) : None
@@ -164,16 +172,17 @@ package "app.services" {
         -_document_repo : DocumentRepository
         -_project_service : ProjectService
         +load_dashboard(query, project_id) : Dashboard
-        -_resolve_proxy_doc_ids(topics, project_id) : dict
+        -_resolve_proxy_confidence(topics, project_id) : dict
+        -_apportion_slots(confidences, sample_size) : dict
         -_topic_evolution(query, proxy_doc_ids) : list<TopicTimeSeries>
         -_topics_by_language(query, proxy_doc_ids) : list<TopicLanguageBreakdown>
         -_topics_by_platform(query, proxy_doc_ids) : list<TopicPlatformBreakdown>
         -_top_entities(query, proxy_doc_ids) : list<TopicEntities>
-        -_relevant_documents(query, proxy_doc_ids) : list<DocumentPreview>
+        -_relevant_documents(query, proxy_confidence) : list<DocumentPreview>
     }
 
     class LLMClient {
-        +reconcile(topics) : list<Topic>
+        +reconcile(topics) : tuple<list<Topic>, bool>
     }
 
     class PageRank <<module>> {
@@ -196,14 +205,17 @@ package "app.repositories" {
         +find(query, proxy_doc_ids) : list<dict>
         +find_by_ids(doc_ids) : list<dict>
         +count(query, proxy_doc_ids) : int
+        +distinct_languages() : list<str>
+        +get_excerpt(doc_id) : str
         +topic_presence_over_time(...) : list<dict>
         +topic_presence_by_language(...) : list<dict>
         +topic_presence_by_platform(...) : list<dict>
         +entities_for_topic(...) : list<list<str>>
         +relevant_documents(...) : list<dict>
-        +get_excerpt(doc_id) : str
+        +mean_topic_confidence(topic, ...) : float
         -_build_filter(query, proxy_doc_ids) : dict
         -_build_vis_match(...) : dict
+        -_relevance_stage(topic, proxy_confidence) : dict
         -_coerce_object_ids(doc_ids) : list<ObjectId>
     }
 
@@ -216,21 +228,22 @@ package "app.repositories" {
         +add_classifier(project_id, classifier) : None
         +find_classifier(project_id, classifier_id) : ClassifierMetadata
         +find_all_classifiers(project_id) : list<ClassifierMetadata>
-        +filter_proxy_doc_ids_by_subtopics(...) : dict
-        +find_proxy_doc_ids_by_topics(...) : dict
+        +delete_classifier(project_id, classifier_id) : None
+        +filter_proxy_doc_ids_by_subtopics(project_id, subtopics, threshold) : dict
+        +find_proxy_confidence_by_topics(project_id, topics) : dict
         +set_pending_pipeline(project_id, pipeline) : None
         +stamp_pipeline_classifier(project_id, classifier_id) : None
         +update_reconciled_topics(project_id, topics) : None
         +clear_pending_pipeline(project_id) : None
         +find_pending_pipeline(project_id) : PendingPipeline
-        +find_labelled_doc_ids(project_id, classifier_id) : list<str>
+        +find_labelled_doc_ids(project_id, classifier_id) : set<str>
         +upsert_document_proxies(project_id, proxies) : None
     }
 
     class TopicRepository {
         -_collection : Collection
-        +find_by_id(topic_id) : Topic
         +find_all() : list<Topic>
+        +find_by_core_topic(core_topic) : list<Topic>
     }
 }
 
@@ -332,16 +345,69 @@ package "app.tasks" {
 ' =====================================================================
 package "app.schemas" {
     ' ---- auth ----
-    class User
-    class UserPublic
-    class AuthToken
-    class LoginForm
-    class RegistrationForm
+    class User {
+        +user_id : str
+        +name : str
+        +surname : str
+        +username : str
+        +hashed_password : str
+        +role : str
+    }
+    class UserPublic {
+        +user_id : str
+        +name : str
+        +surname : str
+        +username : str
+        +role : str
+    }
+    class AuthToken {
+        +access_token : str
+        +token_type : str
+    }
+    class LoginForm {
+        +username : str
+        +password : str
+    }
+    class RegistrationForm {
+        +name : str
+        +surname : str
+        +username : str
+        +password : str
+        +role : str
+    }
 
     ' ---- search ----
-    class SearchQuery
-    class DocumentSummary
-    class SearchResult
+    class SearchQuery {
+        +keywords : list<str>
+        +date_from : datetime
+        +date_to : datetime
+        +languages : list<str>
+        +platforms : list<str>
+        +topics : list<str>
+        +subtopics : list<str>
+        +confidence_threshold : float
+    }
+    class DocumentSummary {
+        +doc_id : str
+        +headline : str
+        +excerpt : str
+        +platform : str
+        +language : str
+        +date : datetime
+        +relevant_topics : list<str>
+    }
+    class SearchResult {
+        +total_docs : int
+    }
+    class TopicChoice {
+        +topic_id : str
+        +name : str
+        +core_topic : str
+    }
+    class SearchTopics {
+        +core_topics : list<TopicChoice>
+        +subtopics : list<TopicChoice>
+    }
 
     ' ---- topic ----
     class Topic {
@@ -349,23 +415,64 @@ package "app.schemas" {
         +name : str
         +description : str
         +origin_topic_ids : list<str>
+        +core_topic : str
     }
-    class GenerateTopicsRequest
-    class ReconciliationRequest
-    class GenerateTopicsResponse
-    class ReconciliationResponse
+    class GenerateTopicsRequest {
+        +project_id : str
+        +doc_ids : list<str>
+    }
+    class ReconciliationRequest {
+        +project_id : str
+    }
+    class GenerateTopicsResponse {
+        +llm_available : bool
+    }
+    class ReconciliationResponse {
+        +llm_available : bool
+    }
 
     ' ---- classification ----
-    class TrainClassifierRequest
-    class ClassifierMetadata
-    class ProxyLabel
-    class DocumentProxy
-    class LabellingResult
-    class LabelRequest
-    class InitialLabelRequest
+    class TrainClassifierRequest {
+        +project_id : str
+        +name : str
+    }
+    class ClassifierMetadata {
+        +classifier_id : str
+        +name : str
+        +file_path : str
+        +created_at : datetime
+    }
+    class ProxyLabel {
+        +topic_id : str
+        +name : str
+        +description : str
+        +classifier_id : str
+        +confidence : float
+    }
+    class DocumentProxy {
+        +doc_id : str
+    }
+    class LabellingResult {
+        +project_id : str
+        +total_labelled : int
+        +topic_summary : dict<str, int>
+    }
+    class LabelRequest {
+        +project_id : str
+        +classifier_id : str
+    }
+    class InitialLabelRequest {
+        +project_id : str
+        +classifier_id : str
+    }
 
     ' ---- project ----
-    class PendingPipeline
+    class PendingPipeline {
+        +generation_job_id : str
+        +created_at : datetime
+        +classifier_id : str
+        +topic_mapping : dict<str, list<str>>
+    }
     class Project {
         +project_id : str
         +owner_id : str
@@ -374,19 +481,59 @@ package "app.schemas" {
     }
 
     ' ---- jobs ----
-    class JobStatus
+    class JobStatus {
+        +job_id : str
+        +status : str
+        +progress : int
+        +result : dict
+    }
 
     ' ---- visualisation ----
-    class VisualisationQuery
-    class EntityScore
-    class TopicEntities
-    class TimePoint
-    class TopicTimeSeries
-    class LanguageCount
-    class TopicLanguageBreakdown
-    class PlatformCount
-    class TopicPlatformBreakdown
-    class DocumentPreview
+    class VisualisationQuery {
+        +topics : list<str>
+        +date_from : datetime
+        +date_to : datetime
+        +languages : list<str>
+        +platforms : list<str>
+        +sample_size : int
+    }
+    class EntityScore {
+        +entity : str
+        +score : float
+    }
+    class TopicEntities {
+        +topic : str
+    }
+    class TimePoint {
+        +date : str
+        +count : int
+    }
+    class TopicTimeSeries {
+        +topic : str
+    }
+    class LanguageCount {
+        +language : str
+        +count : int
+    }
+    class TopicLanguageBreakdown {
+        +topic : str
+    }
+    class PlatformCount {
+        +platform : str
+        +count : int
+    }
+    class TopicPlatformBreakdown {
+        +topic : str
+    }
+    class DocumentPreview {
+        +doc_id : str
+        +platform : str
+        +language : str
+        +date : datetime
+        +topic : str
+        +relevance_score : float
+        +excerpt : str
+    }
     class Dashboard
 }
 
@@ -416,6 +563,33 @@ APIRouterVisualisation ..> VisualisationService
 APIRouterVisualisation ..> ProjectService
 APIRouterJobs ..> JobQueueService
 
+' ---- routers -> schemas (request / response types) ----
+APIRouterAuth ..> LoginForm
+APIRouterAuth ..> RegistrationForm
+APIRouterAuth ..> AuthToken
+APIRouterAuth ..> UserPublic
+APIRouterSearch ..> SearchQuery
+APIRouterSearch ..> SearchResult
+APIRouterTopics ..> GenerateTopicsRequest
+APIRouterTopics ..> ReconciliationRequest
+APIRouterTopics ..> GenerateTopicsResponse
+APIRouterTopics ..> ReconciliationResponse
+APIRouterClassification ..> TrainClassifierRequest
+APIRouterClassification ..> LabelRequest
+APIRouterClassification ..> InitialLabelRequest
+APIRouterClassification ..> LabellingResult
+APIRouterVisualisation ..> VisualisationQuery
+APIRouterVisualisation ..> Dashboard
+APIRouterProjects ..> Project
+APIRouterProjects ..> SearchTopics
+APIRouterJobs ..> JobStatus
+
+' ---- Dependencies -> repositories + MongoDB (factory functions) ----
+Dependencies ..> UserRepository
+Dependencies ..> DocumentRepository
+Dependencies ..> ProjectRepository
+Dependencies ..> TopicRepository
+Dependencies ..> MongoDB
 Dependencies ..> AuthService
 Dependencies ..> SearchService
 Dependencies ..> ProjectService
@@ -424,7 +598,7 @@ Dependencies ..> ClassificationService
 Dependencies ..> TopicModellingService
 Dependencies ..> JobQueueService
 
-' ---- services -> repositories / infrastructure ----
+' ---- services -> repositories (solid: stored as attributes) ----
 AuthService --> UserRepository
 AuthService --> PasswordHasher
 AuthService --> JWTHandler
@@ -439,11 +613,17 @@ TopicModellingService --> JobQueueService
 
 VisualisationService --> DocumentRepository
 VisualisationService --> ProjectService
+
+' ---- services -> tasks (runtime dispatch by name via JobQueueService, NOT an import) ----
+ClassificationService ..> ClassifierTrainingTask : «dispatches»
+ClassificationService ..> LabellingTask : «dispatches»
+TopicModellingService ..> TopicGenerationTask : «dispatches»
+TopicModellingService ..> ReconciliationTask : «dispatches»
+
+' ---- services -> PageRank module ----
 VisualisationService ..> PageRank
 
-LLMClient ..> Topic
-
-' ---- services -> schemas (DTOs used as parameter / return / constructed types) ----
+' ---- services -> schemas (parameter / return / constructed types) ----
 AuthService ..> AuthToken
 AuthService ..> User
 AuthService ..> RegistrationForm
@@ -459,9 +639,14 @@ ProjectService ..> DocumentProxy
 ProjectService ..> ProxyLabel
 ProjectService ..> PendingPipeline
 ProjectService ..> LabellingResult
+ProjectService ..> SearchTopics
+
+TopicModellingService ..> Topic
 
 ClassificationService ..> Topic
 ClassificationService ..> SearchQuery
+
+LLMClient ..> Topic
 
 VisualisationService ..> VisualisationQuery
 VisualisationService ..> Dashboard
@@ -475,49 +660,71 @@ VisualisationService ..> TopicEntities
 VisualisationService ..> EntityScore
 VisualisationService ..> DocumentPreview
 
-' ---- repositories -> mongo + schemas ----
+' ---- repositories -> MongoDB + schemas ----
 UserRepository ..> User
+UserRepository ..> MongoDB
 DocumentRepository ..> SearchQuery
+DocumentRepository ..> MongoDB
 ProjectRepository ..> Project
 ProjectRepository ..> ClassifierMetadata
 ProjectRepository ..> DocumentProxy
 ProjectRepository ..> PendingPipeline
-TopicRepository ..> Topic
-UserRepository ..> MongoDB
-DocumentRepository ..> MongoDB
 ProjectRepository ..> MongoDB
+TopicRepository ..> Topic
 TopicRepository ..> MongoDB
 
-' ---- infrastructure ----
+' ---- infrastructure -> Settings ----
+JWTHandler ..> Settings
+MongoDB ..> Settings
+JobQueueService ..> Settings
+MutexManager ..> Settings
+LLMClient ..> Settings
+OllamaRepresentation ..> Settings
+ClassifierWrapper ..> Settings
+EmbeddingCache ..> Settings
+DocumentRepository ..> Settings
+
+' ---- infrastructure: JobQueueService -> CeleryApp ----
 JobQueueService --> CeleryApp
 JobQueueService ..> JobStatus
-JWTHandler ..> Settings
-DocumentRepository ..> Settings
-MongoDB ..> Settings
 
-' ---- tasks -> services (via TaskContext) + infrastructure ----
-ClassifierTrainingTask ..> ClassifierWrapper
-ClassifierTrainingTask ..> ClassifierMetadata
-ClassifierTrainingTask ..> TaskContext
-LabellingTask ..> ClassifierWrapper
-LabellingTask ..> TaskContext
-LabellingTask ..> DocumentProxy
-ReconciliationTask ..> LLMClient
-ReconciliationTask ..> TaskContext
-TopicGenerationTask ..> OllamaRepresentation
-TopicGenerationTask ..> PendingPipeline
-TopicGenerationTask ..> TaskContext
-
+' ---- tasks -> CeleryApp (all tasks are registered with the Celery app) ----
 ClassifierTrainingTask ..> CeleryApp
 LabellingTask ..> CeleryApp
 ReconciliationTask ..> CeleryApp
 TopicGenerationTask ..> CeleryApp
 
+' ---- tasks -> services (through TaskContext) ----
+ClassifierTrainingTask ..> TaskContext
+LabellingTask ..> TaskContext
+ReconciliationTask ..> TaskContext
+TopicGenerationTask ..> TaskContext
+
 TaskContext ..> SearchService
 TaskContext ..> ProjectService
 TaskContext ..> MutexManager
+TaskContext ..> MongoDB
 
-' ---- schema composition ----
+' ---- tasks -> services (direct runtime dependencies) ----
+ClassifierTrainingTask ..> SearchService
+ClassifierTrainingTask ..> ProjectService
+LabellingTask ..> SearchService
+LabellingTask ..> ProjectService
+LabellingTask ..> MutexManager
+ReconciliationTask ..> LLMClient
+ReconciliationTask ..> ProjectService
+TopicGenerationTask ..> SearchService
+TopicGenerationTask ..> ProjectService
+
+' ---- tasks -> infrastructure adapters ----
+ClassifierTrainingTask ..> ClassifierWrapper
+ClassifierTrainingTask ..> ClassifierMetadata
+LabellingTask ..> ClassifierWrapper
+LabellingTask ..> DocumentProxy
+TopicGenerationTask ..> OllamaRepresentation
+TopicGenerationTask ..> PendingPipeline
+
+' ---- schema composition (whole owns parts) ----
 Project *-- "0..*" ClassifierMetadata
 Project *-- "0..*" DocumentProxy
 Project *-- "0..1" PendingPipeline
@@ -526,10 +733,11 @@ DocumentProxy *-- "0..*" ProxyLabel
 PendingPipeline *-- "0..*" Topic
 TrainClassifierRequest *-- "0..*" Topic
 LabelRequest *-- SearchQuery
-SearchResult *-- "0..*" DocumentSummary
 ReconciliationRequest *-- "0..*" Topic
 GenerateTopicsResponse *-- "0..*" Topic
 ReconciliationResponse *-- "0..*" Topic
+SearchResult *-- "0..*" DocumentSummary
+SearchTopics *-- "0..*" TopicChoice
 
 Dashboard *-- "0..*" TopicTimeSeries
 Dashboard *-- "0..*" TopicLanguageBreakdown
