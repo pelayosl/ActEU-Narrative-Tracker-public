@@ -20,6 +20,7 @@ def document_repo() -> AsyncMock:
     repo.entities_for_topic.return_value = []
     repo.relevant_documents.return_value = []
     repo.mean_topic_confidence.return_value = 0.5
+    repo.count_topic_documents.return_value = 5
     return repo
 
 
@@ -310,12 +311,12 @@ class TestRelevantDocuments:
         args = document_repo.relevant_documents.call_args.args
         assert args[5] == {"a": 1.0, "b": 1.0}
 
-    async def test_slots_proportional_to_mean_confidence(self, service, document_repo):
-        # Topic "a" has higher mean confidence than "b", so it should contribute more
+    async def test_slots_proportional_to_document_count(self, service, document_repo):
+        # Topic "a" matches more documents than "b", so it should contribute more
         # documents to the sample. Each topic owns a distinct, plentiful doc set.
-        def mean(topic, *args, **kwargs):
-            return {"a": 0.9, "b": 0.1}[topic]
-        document_repo.mean_topic_confidence.side_effect = mean
+        def count(topic, *args, **kwargs):
+            return {"a": 90, "b": 10}[topic]
+        document_repo.count_topic_documents.side_effect = count
 
         def per_topic(topic, *args, **kwargs):
             return [make_relevant(f"{topic}{i}", 0.5) for i in range(10)]
@@ -326,11 +327,11 @@ class TestRelevantDocuments:
         assert len(result.relevant_documents) == 10
         assert topics.count("a") > topics.count("b")
 
-    async def test_low_confidence_topic_still_appears(self, service, document_repo):
-        # "b" has zero mean confidence but must still contribute its guaranteed slot.
-        def mean(topic, *args, **kwargs):
-            return {"a": 0.99, "b": 0.0}[topic]
-        document_repo.mean_topic_confidence.side_effect = mean
+    async def test_empty_topic_still_appears(self, service, document_repo):
+        # "b" matches no documents but must still contribute its guaranteed slot.
+        def count(topic, *args, **kwargs):
+            return {"a": 99, "b": 0}[topic]
+        document_repo.count_topic_documents.side_effect = count
 
         def per_topic(topic, *args, **kwargs):
             return [make_relevant(f"{topic}{i}", 0.5) for i in range(10)]
@@ -339,6 +340,25 @@ class TestRelevantDocuments:
         result = await service.load_dashboard(make_query(topics=["a", "b"], sample_size=10))
         topics = [r.topic for r in result.relevant_documents]
         assert topics.count("b") >= 1
+
+    async def test_selection_varies_platforms_when_available(self, service, document_repo):
+        # One topic, 4 slots. The 3 highest-confidence docs are all twitter; a single
+        # telegram doc is less confident. Platform interleaving should pull the telegram
+        # doc into the selection instead of taking the top 4 twitter docs.
+        document_repo.relevant_documents.return_value = [
+            make_relevant("t1", 0.9, platform="twitter"),
+            make_relevant("t2", 0.85, platform="twitter"),
+            make_relevant("t3", 0.8, platform="twitter"),
+            make_relevant("t4", 0.75, platform="twitter"),
+            make_relevant("g1", 0.5, platform="telegram"),
+        ]
+        result = await service.load_dashboard(
+            make_query(topics=["immigration"], sample_size=4)
+        )
+        platforms = {r.platform for r in result.relevant_documents}
+        ids = {r.doc_id for r in result.relevant_documents}
+        assert "telegram" in platforms
+        assert "g1" in ids
 
     async def test_sparse_topic_slots_redistributed(self, service, document_repo):
         # "b" only owns 1 document; its unfilled slots are redistributed to "a" so the
@@ -381,3 +401,27 @@ class TestApportionSlots:
     def test_sample_size_equal_to_topic_count(self):
         slots = VisualisationService._apportion_slots({"a": 0.9, "b": 0.3}, 2)
         assert slots == {"a": 1, "b": 1}
+
+
+# ---------------------------------------------------------------------------
+# _diversify_by_platform (pure interleaving logic)
+# ---------------------------------------------------------------------------
+
+class TestDiversifyByPlatform:
+    def test_single_platform_unchanged(self):
+        docs = [make_relevant(f"d{i}", 0.9 - i / 10, platform="twitter") for i in range(3)]
+        assert VisualisationService._diversify_by_platform(docs) == docs
+
+    def test_interleaves_platforms_keeping_relevance_head(self):
+        docs = [
+            make_relevant("t1", 0.9, platform="twitter"),
+            make_relevant("t2", 0.8, platform="twitter"),
+            make_relevant("g1", 0.5, platform="telegram"),
+        ]
+        order = [d["doc_id"] for d in VisualisationService._diversify_by_platform(docs)]
+        # Highest-relevance doc stays first; the second platform is pulled ahead of the
+        # second twitter doc.
+        assert order == ["t1", "g1", "t2"]
+
+    def test_empty_list(self):
+        assert VisualisationService._diversify_by_platform([]) == []

@@ -439,3 +439,36 @@ class TestMeanTopicConfidence:
         await db["documents"].insert_one(make_doc())
         mean = await repo.mean_topic_confidence("nonexistent", D_FROM, D_TO, [], [])
         assert mean is None
+
+
+# ---------------------------------------------------------------------------
+# count_topic_documents()
+# ---------------------------------------------------------------------------
+
+class TestCountTopicDocuments:
+    async def test_counts_matching_documents(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.4}),
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.9}),
+            make_doc(acteu_topic={"label": "other", "confidence": 0.9}),
+        ])
+        count = await repo.count_topic_documents("immigration", D_FROM, D_TO, [], [])
+        assert count == 2
+
+    async def test_includes_proxy_documents(self, db, repo):
+        await db["documents"].insert_one(
+            make_doc(acteu_topic={"label": "immigration", "confidence": 0.6})
+        )
+        proxy_only = await db["documents"].insert_one(
+            make_doc(acteu_topic={"label": "other", "confidence": 0.9})
+        )
+        proxy_id = str(proxy_only.inserted_id)
+        count = await repo.count_topic_documents(
+            "immigration", D_FROM, D_TO, [], [], proxy_doc_ids=[proxy_id]
+        )
+        assert count == 2
+
+    async def test_zero_when_no_match(self, db, repo):
+        await db["documents"].insert_one(make_doc())
+        count = await repo.count_topic_documents("nonexistent", D_FROM, D_TO, [], [])
+        assert count == 0
