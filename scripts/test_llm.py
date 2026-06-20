@@ -268,10 +268,10 @@ def test_specific_model(model):
                 json={
                     "model": model,
                     "messages": [
-                        {"role": "user", "content": "Hi"}
+                        {"role": "user", "content": "Talk to me (briefly) about your model and its benchmark performance."}
                     ],
                 },
-                timeout=30,
+                timeout=120,
             )
 
             if response.status_code == 200:
@@ -282,4 +282,4 @@ def test_specific_model(model):
     except Exception as e:
             print(f"❌ {e}")
 
-test_specific_model("llama3.2:latest")
+test_specific_model("gemma4:26b")
