@@ -11,7 +11,7 @@ import { TopEntities } from "@/components/visualiser/top-entities";
 import { DocumentsList } from "@/components/visualiser/documents-list";
 import { ProjectSelectorDialog } from "@/components/projects/project-selector-dialog";
 import { TOPIC_COLORS, type TopicSeriesMeta } from "@/components/visualiser/topic-colors";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import { useProjectStore } from "@/stores/project-store";
 import type { Dashboard, VisualisationQuery } from "@/types/api";
 
@@ -52,7 +52,7 @@ export default function VisualiserPage() {
       <div className="space-y-6">
         {load.isError && (
           <div role="alert" className="rounded-md border border-acteu-red/30 bg-acteu-red/5 p-3 text-sm text-acteu-red">
-            Could not load the visualisation. Please try again.
+            {errorMessage(load.error, "Could not load the visualisation. Please try again.")}
           </div>
         )}
 

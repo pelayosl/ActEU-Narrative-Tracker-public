@@ -21,6 +21,25 @@ export class ApiError extends Error {
   }
 }
 
+// The backend returns 503 when MongoDB is unreachable (see app/main.py). The UI
+// uses this to tell the user the database is down rather than blaming their query.
+export function isDatabaseUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 503;
+}
+
+export const DB_UNAVAILABLE_MESSAGE =
+  "The database is currently unavailable. Please try again in a few moments.";
+
+// Sentinel relayed from the NextAuth authorize() callback (see lib/auth.ts) to the
+// login form via NextAuth's res.error, so login can show the DB-down message on a 503.
+// Lives here (client-safe) so the client doesn't import the server-only auth module.
+export const DB_UNAVAILABLE_ERROR = "DatabaseUnavailable";
+
+// Picks the DB-down message for a 503, otherwise the caller's context-specific fallback.
+export function errorMessage(error: unknown, fallback: string): string {
+  return isDatabaseUnavailable(error) ? DB_UNAVAILABLE_MESSAGE : fallback;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,

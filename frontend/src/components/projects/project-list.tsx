@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ApplyClassifierDialog } from "./apply-classifier-dialog";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import { useProjectStore } from "@/stores/project-store";
 import type { ClassifierMetadata, Project } from "@/types/api";
 
@@ -53,7 +53,7 @@ export function ProjectList() {
       // Visualiser force a fresh project selection.
       if (activeProject?.project_id === projectId) setActiveProject(null);
     },
-    onError: () => setError("Could not delete the project. Please try again."),
+    onError: (err) => setError(errorMessage(err, "Could not delete the project. Please try again.")),
     onSettled: () => setDeleteProjectTarget(null),
   });
 
@@ -76,7 +76,7 @@ export function ProjectList() {
         });
       }
     },
-    onError: () => setError("Could not delete the classifier. Please try again."),
+    onError: (err) => setError(errorMessage(err, "Could not delete the classifier. Please try again.")),
     onSettled: () => setDeleteClassifierTarget(null),
   });
 
@@ -93,8 +93,8 @@ export function ProjectList() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      setError("Could not download the classifier. Please try again.");
+    } catch (err) {
+      setError(errorMessage(err, "Could not download the classifier. Please try again."));
     } finally {
       setDownloadingId(null);
     }
@@ -106,7 +106,7 @@ export function ProjectList() {
     return <div className="rounded-lg border border-border bg-white p-6 text-sm text-muted-foreground">Loading projects…</div>;
   }
   if (projectsQuery.isError) {
-    return <div className="rounded-lg border border-acteu-red/30 bg-acteu-red/5 p-6 text-sm text-acteu-red">Could not load projects.</div>;
+    return <div className="rounded-lg border border-acteu-red/30 bg-acteu-red/5 p-6 text-sm text-acteu-red">{errorMessage(projectsQuery.error, "Could not load projects.")}</div>;
   }
   if (projects.length === 0) {
     return <div className="rounded-lg border border-border bg-white p-6 text-sm text-muted-foreground">No projects yet. Start a pipeline to create one.</div>;

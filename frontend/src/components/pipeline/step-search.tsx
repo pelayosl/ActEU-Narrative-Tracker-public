@@ -8,7 +8,7 @@ import { SearchForm } from "./search-form";
 import { DocumentCard } from "./document-card";
 import { PlatformBadge } from "./platform-badge";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import { usePipelineStore } from "@/stores/pipeline-store";
 import { useProjectStore } from "@/stores/project-store";
 import type { SearchQuery } from "@/types/api";
@@ -94,7 +94,7 @@ export function StepSearch() {
 
       {search.isError && (
         <div className="rounded-md border border-acteu-red/30 bg-acteu-red/5 p-3 text-sm text-acteu-red">
-          Search failed. Please try again.
+          {errorMessage(search.error, "Search failed. Please try again.")}
         </div>
       )}
 

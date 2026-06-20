@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/lib/api-client";
+import { api, isDatabaseUnavailable, DB_UNAVAILABLE_MESSAGE } from "@/lib/api-client";
 import type { UserRole } from "@/types/api";
 
 const USERNAME_RE = /^[A-Za-z0-9_]+$/;
@@ -66,9 +66,11 @@ export function RegisterDialog({
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       setError(
-        msg.includes("409")
-          ? "This username is already taken"
-          : "Registration failed. Please try again.",
+        isDatabaseUnavailable(err)
+          ? DB_UNAVAILABLE_MESSAGE
+          : msg.includes("409")
+            ? "This username is already taken"
+            : "Registration failed. Please try again.",
       );
     } finally {
       setLoading(false);

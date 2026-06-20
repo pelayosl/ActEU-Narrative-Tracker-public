@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DB_UNAVAILABLE_ERROR, DB_UNAVAILABLE_MESSAGE } from "@/lib/api-client";
 
 export function LoginForm() {
   const router = useRouter();
@@ -23,8 +24,9 @@ export function LoginForm() {
 
     setLoading(false);
     if (res?.error) {
-      // Inline, generic — never reveal which field was wrong.
-      setError("Invalid credentials");
+      // A 503 from the backend is relayed as DB_UNAVAILABLE_ERROR; anything else
+      // stays generic — never reveal which field was wrong.
+      setError(res.error === DB_UNAVAILABLE_ERROR ? DB_UNAVAILABLE_MESSAGE : "Invalid credentials");
       return;
     }
     router.push("/pipeline");

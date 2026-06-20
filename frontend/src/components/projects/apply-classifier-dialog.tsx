@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { SearchForm } from "@/components/pipeline/search-form";
 import { JobProgress } from "@/components/pipeline/job-progress";
 import { LabellingSummary } from "@/components/pipeline/labelling-summary";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import { useJob } from "@/lib/use-job";
 import type { ClassifierMetadata, LabellingResult, Project, SearchQuery } from "@/types/api";
 
@@ -52,8 +52,8 @@ export function ApplyClassifierDialog({ project, classifier, open, onOpenChange 
         session?.accessToken,
       );
       setJobId(job_id);
-    } catch {
-      setError("Could not start labelling. Please try again.");
+    } catch (err) {
+      setError(errorMessage(err, "Could not start labelling. Please try again."));
     }
   }
 
