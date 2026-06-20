@@ -24,6 +24,7 @@ services:
       DATA_DIR: /data/db_import
     volumes:
       - ${DATA_DIR}:/data/db_import:ro
+      - classifier_data:/app/classifiers
     depends_on:
       - mongo
       - redis
