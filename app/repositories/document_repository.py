@@ -398,12 +398,21 @@ class DocumentRepository:
         pipeline = [
             {"$match": match},
             self._relevance_stage(topic, proxy_confidence),
-            # Sort confident matches first; documents with no confidence rank last.
-            {"$sort": {"_relevance": -1, "_id": 1}},
-            # Keep the top `limit` documents of each platform (the preceding $sort
-            # order is preserved inside each platform's pushed array).
-            {"$group": {"_id": "$platform", "docs": {"$push": "$$ROOT"}}},
-            {"$project": {"docs": {"$slice": ["$docs", limit]}}},
+            # Keep only the top `limit` documents of each platform, ranked by
+            # relevance (confident matches first; no-confidence docs rank last).
+            # $topN is memory-bounded to `limit` docs per platform, to avoid memory overflows.
+            {
+                "$group": {
+                    "_id": "$platform",
+                    "docs": {
+                        "$topN": {
+                            "n": limit,
+                            "sortBy": {"_relevance": -1, "_id": 1},
+                            "output": "$$ROOT",
+                        }
+                    },
+                }
+            },
             {"$unwind": "$docs"},
             {"$replaceRoot": {"newRoot": "$docs"}},
             {
