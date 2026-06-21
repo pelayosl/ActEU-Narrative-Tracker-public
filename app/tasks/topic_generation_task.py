@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from app.config import settings
 
 import httpx
+import numpy as np
 from bertopic import BERTopic
 from bertopic.representation import BaseRepresentation
 from celery import Task
@@ -17,11 +18,16 @@ from sentence_transformers import SentenceTransformer
 logger = logging.getLogger(__name__)
 
 from app.config import settings
+from app.infrastructure.embedding_cache import EmbeddingCache
 from app.tasks.task_context import project_service_context, search_service_context
 from app.schemas.project import PendingPipeline
 from app.schemas.topic import OTHER_TOPIC_ID, GenerateTopicsResponse, Topic
 from app.tasks.celery_app import celery_app
 
+
+# Embedding model used both to compute vectors and to namespace the embedding cache,
+# so a model change can never serve stale vectors.
+EMBEDDING_MODEL_NAME = "google/embeddinggemma-300m"
 
 # Minimum number of documents BERTopic/UMAP need to cluster meaningfully.
 # Below this, UMAP's k-NN graph collapses to an empty array and fit_transform
@@ -118,10 +124,22 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
     filtered_doc_ids = [doc_id for _, doc_id in text_doc_pairs]
 
     _update(task, 10, "Computing embeddings")
-    embedding_model = SentenceTransformer("google/embeddinggemma-300m", token=settings.HF_TOKEN, trust_remote_code=True)
-    embeddings = embedding_model.encode(texts, show_progress_bar=False)
+    embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, token=settings.HF_TOKEN, trust_remote_code=True)
 
-    # Phase 2: Embedding cache hooks go here, future implementation
+    # Reuse previously computed vectors; embed only texts not already cached.
+    # Keyed by text hash, so the cache survives DB reloads and de-duplicates texts.
+    cache = EmbeddingCache(settings.EMBEDDING_CACHE_DIR, EMBEDDING_MODEL_NAME)
+    try:
+        cached, missing = cache.get_many(texts)
+        if missing:
+            new_embeddings = embedding_model.encode(missing, show_progress_bar=False)
+            cache.store_many(missing, new_embeddings)
+            for text, vec in zip(missing, new_embeddings):
+                cached[text] = vec
+    finally:
+        cache.close()
+    # Reassemble in input order — BERTopic requires embeddings row-aligned with texts.
+    embeddings = np.array([cached[text] for text in texts])
 
     _update(task, 40, "Clustering documents")
     topic_count_ref = [0]

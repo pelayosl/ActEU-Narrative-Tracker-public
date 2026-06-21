@@ -40,6 +40,7 @@ services:
       CELERY_AUTODISCOVER: "1"
     volumes:
       - classifier_data:/app/classifiers
+      - embedding_cache:/app/embedding_cache
     depends_on:
       - mongo
       - redis
@@ -47,3 +48,4 @@ services:
 volumes:
   mongo_data:
   classifier_data:
+  embedding_cache:
