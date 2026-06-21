@@ -15,9 +15,11 @@ export function JobProgress({
     <div className="space-y-3">
       <div className="h-2 w-full overflow-hidden rounded-full bg-bg">
         <div
-          className="h-full rounded-full bg-acteu-red transition-all duration-500"
+          className="relative h-full overflow-hidden rounded-full bg-acteu-red transition-all duration-500"
           style={{ width: `${Math.max(progress, 4)}%` }}
-        />
+        >
+          <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+        </div>
       </div>
       <p className="text-sm text-muted-foreground">
         {step || fallback} {progress > 0 && <span className="tabular-nums">· {progress}%</span>}

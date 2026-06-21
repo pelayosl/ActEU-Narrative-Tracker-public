@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, FolderKanban, BarChart3 } from "lucide-react";
+import { LayoutGrid, FolderKanban, BarChart3, PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui-store";
 import { ProfileMenu } from "./profile-menu";
 
 const items = [
@@ -14,6 +15,10 @@ const items = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+
+  if (!sidebarOpen) return null;
 
   return (
     <aside className="flex w-60 flex-col border-r border-border bg-white">
@@ -25,7 +30,14 @@ export function Sidebar() {
         >
           ActEU
         </Link>
-        <ProfileMenu />
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="rounded-md p-1 text-ink transition-colors hover:bg-bg"
+          aria-label="Hide sidebar"
+        >
+          <PanelLeftClose className="h-5 w-5" />
+        </button>
       </div>
       <nav className="flex-1 space-y-1 p-2">
         {items.map(({ href, label, icon: Icon }) => {
@@ -45,6 +57,9 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="border-t border-border p-2">
+        <ProfileMenu />
+      </div>
     </aside>
   );
 }

@@ -30,29 +30,29 @@ const FEATURES = [
   {
     icon: Search,
     title: "Faceted search",
-    body: "Carve out collections from a multilingual corpus by date, country, platform, topic and subtopic — a Media Cloud-style entry point into the data.",
+    body: "Carve out collections from a multilingual corpus by date, country, platform, topic and subtopic. Use keywords to target specific actors or events, analyse the results, and see the subset of documents you want to work with.",
   },
   {
     icon: Boxes,
-    title: "Topic modelling",
-    body: "Run BERTopic over a collection to surface latent narratives, with multilingual embeddings and topic labels drafted by a language model.",
+    title: "Topic generation",
+    body: "Easily run BERTopic over a collection to surface latent narratives, with multilingual embeddings and topic labels drafted by a language model. No technical knowledge required, generate insightful topics from document subsets on the go.",
   },
   {
     icon: GitMerge,
     title: "Expert-in-the-loop",
-    body: "Reconcile topics across countries and platforms, then edit, merge and validate them by hand before annotating documents and training a classifier.",
+    body: "Reconcile topics across languages and platforms with the use of a language model, then edit, merge and validate them by hand before annotating documents and training a classifier. Store classifiers in your projects to apply them over new document collection, and use them to label and populate your own personal dataset.",
   },
   {
     icon: LineChart,
     title: "Narrative visualisation",
-    body: "Track how topics evolve over time, compare languages and platforms, and surface the most central entities and the most relevant documents.",
+    body: "Track how topics evolve over time, compare languages and platforms, and surface the most central entities and the most relevant documents. Visualise your newly-discovered narratives in a user friendly dashboard use it to help you in your research.",
   },
 ];
 
 const PIPELINE_STEPS = [
   { n: "1", label: "Search" },
-  { n: "2", label: "Topic Modelling" },
-  { n: "3", label: "Label Dataset" },
+  { n: "2", label: "Topic modelling" },
+  { n: "3", label: "Apply labels" },
   { n: "4", label: "Visualise" },
 ];
 
@@ -116,8 +116,8 @@ export function LandingPage() {
                 A research tool for the European{" "}
                 <span className="font-medium text-ink">ActEU</span> project that turns a
                 multilingual, multi-platform corpus of political discourse into an
-                explorable map of narratives — combining clustering, topic modelling and
-                language models with expert validation.
+                explorable map of narratives, thanks to the power of clustering, topic modelling and
+                large language models with expert validation.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -197,7 +197,7 @@ export function LandingPage() {
           <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
             <div className="grid gap-10 md:grid-cols-[1fr_1.4fr] md:items-start">
               <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
-                Part of the ActEU research project
+                Towards a new era of representative democracy
               </h2>
               <div className="space-y-4 text-base leading-relaxed text-muted-foreground">
                 <p>
@@ -205,13 +205,15 @@ export function LandingPage() {
                   research initiative studying trust, legitimacy and polarisation in
                   contemporary European democracies. It works with discourse drawn from
                   social media, digital press and institutional sites across ten European
-                  countries.
+                  countries: Austria, Czechia, Denmark, Finland, France, Germany, Greece, Italy, Poland, and Spain.
+                  The project focuses on three highly salient policy areas: climate change, gender equality, and migration,
+                  which serve as critical lenses for examining how societal divisions affect democratic stability.
                 </p>
                 <p>
-                  The Narrative Tracker is the analytical instrument built on top of that
+                  The <span className="font-medium text-ink">Narrative Tracker</span> is the analytical instrument built on top of that
                   data: it lets researchers and communication professionals move from a
                   raw, multilingual corpus to validated, human-refined narratives that can
-                  be explored dynamically — in both academic and professional settings.
+                  be explored dynamically, in both academic and professional settings.
                 </p>
                 <a
                   href="https://acteu.org/"
@@ -330,7 +332,7 @@ export function LandingPage() {
             </h2>
             <p className="max-w-xl text-white/85">
               Sign in with your researcher credentials to start building collections and
-              tracking topics.
+              tracking topics, or ask an admin to create an account for you.
             </p>
             <Link
               href="/login"

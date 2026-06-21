@@ -17,12 +17,25 @@ export function ProfileMenu() {
   const { data: session } = useSession();
   const [registerOpen, setRegisterOpen] = useState(false);
   const isAdmin = session?.user?.role === "admin";
+  const role = session?.user?.role;
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : "";
 
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="rounded-full p-1 hover:bg-bg" aria-label="Profile menu">
-          <UserCircle className="h-6 w-6 text-ink" />
+        <DropdownMenuTrigger
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-bg"
+          aria-label="Profile menu"
+        >
+          <UserCircle className="h-6 w-6 shrink-0 text-ink" />
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-medium text-ink">
+              {session?.user?.username ?? "Account"}
+            </span>
+            {roleLabel && (
+              <span className="truncate text-xs text-muted-foreground">{roleLabel}</span>
+            )}
+          </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           {session?.user && (

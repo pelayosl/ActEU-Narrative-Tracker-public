@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { QueryPanel } from "@/components/visualiser/query-panel";
@@ -63,7 +64,8 @@ export default function VisualiserPage() {
         )}
 
         {load.isPending && (
-          <div className="rounded-lg border border-border bg-white p-12 text-center text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-white p-12 text-center text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin text-acteu-red" />
             Loading visualisation…
           </div>
         )}
