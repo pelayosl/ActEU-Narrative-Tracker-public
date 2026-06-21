@@ -161,7 +161,7 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
 
       {/* Topics — chips + add picker */}
       <div>
-        <Label>Topics</Label>
+        <Label>Topics and Subtopics</Label>
         <div className="flex flex-wrap items-center gap-2">
           {topics.map((value) => (
             <span

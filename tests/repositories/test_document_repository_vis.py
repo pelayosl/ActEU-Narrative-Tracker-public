@@ -407,6 +407,21 @@ class TestRelevantDocuments:
         result = await repo.relevant_documents("nonexistent", D_FROM, D_TO, [], [])
         assert result == []
 
+    async def test_keeps_top_documents_of_each_platform(self, db, repo):
+        await db["documents"].insert_many([
+            make_doc(platform="twitter", acteu_topic={"label": "immigration", "confidence": c})
+            for c in (0.9, 0.85, 0.8)
+        ])
+        await db["documents"].insert_one(
+            make_doc(platform="telegram", acteu_topic={"label": "immigration", "confidence": 0.5})
+        )
+        result = await repo.relevant_documents("immigration", D_FROM, D_TO, [], [], limit=2)
+        platforms = {d["platform"] for d in result}
+        assert platforms == {"twitter", "telegram"}
+        # Two twitter (the limit) + one telegram.
+        assert sum(d["platform"] == "twitter" for d in result) == 2
+        assert sum(d["platform"] == "telegram" for d in result) == 1
+
 
 # ---------------------------------------------------------------------------
 # mean_topic_confidence()

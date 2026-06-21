@@ -11,14 +11,32 @@ interface DocumentsListProps {
   topics: TopicSeriesMeta[];
 }
 
+// Orders a topic's documents by platform: platforms are grouped together (ordered by
+// their most relevant document) and ranked by relevance within each platform — so the
+// same-platform documents are contiguous while the most relevant ones still lead.
+function orderByPlatform(docs: DocumentPreview[]): DocumentPreview[] {
+  const byPlatform = new Map<string, DocumentPreview[]>();
+  for (const doc of docs) {
+    const list = byPlatform.get(doc.platform) ?? [];
+    list.push(doc);
+    byPlatform.set(doc.platform, list);
+  }
+  const groups = [...byPlatform.values()];
+  for (const group of groups) {
+    group.sort((a, b) => b.relevance_score - a.relevance_score);
+  }
+  groups.sort((a, b) => b[0].relevance_score - a[0].relevance_score);
+  return groups.flat();
+}
+
 // The relevant documents are a document-count-weighted stratified sample across the
 // query topics (computed server-side, with platforms interleaved per topic). They are
-// grouped here by topic so each topic's examples are shown together, ranked by
-// relevance within the group. The same document may appear under more than one topic.
+// grouped here by topic and, within each topic, ordered by platform so each platform's
+// examples sit together. The same document may appear under more than one topic.
 export function DocumentsList({ data, topics }: DocumentsListProps) {
-  // Group documents by topic, following the query's topic order; documents within a
-  // group keep the relevance order the backend already applied. Topics with no
-  // matching documents (and any unknown topics) are handled gracefully.
+  // Group documents by topic, following the query's topic order; within a topic the
+  // documents are ordered by platform. Topics with no matching documents (and any
+  // unknown topics) are handled gracefully.
   const groups = useMemo(() => {
     const byTopic = new Map<string, DocumentPreview[]>();
     for (const doc of data) {
@@ -31,13 +49,13 @@ export function DocumentsList({ data, topics }: DocumentsListProps) {
     for (const t of topics) {
       const docs = byTopic.get(t.value);
       if (docs) {
-        ordered.push({ value: t.value, meta: t, docs });
+        ordered.push({ value: t.value, meta: t, docs: orderByPlatform(docs) });
         byTopic.delete(t.value);
       }
     }
     // Any topics not present in the legend metadata are appended last.
     for (const [value, docs] of byTopic) {
-      ordered.push({ value, docs });
+      ordered.push({ value, docs: orderByPlatform(docs) });
     }
     return ordered;
   }, [data, topics]);

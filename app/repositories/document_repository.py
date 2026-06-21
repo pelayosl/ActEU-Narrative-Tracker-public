@@ -378,7 +378,9 @@ class DocumentRepository:
         proxy_confidence: dict[str, float] | None = None,
         limit: int = 10,
     ) -> list[dict]:
-        """Top documents for a topic ranked by their confidence for that topic.
+        """Top documents for a topic ranked by their confidence for that topic, taking
+        up to `limit` documents *per platform* so every platform present among the
+        matches is represented (callers can then interleave/trim across platforms).
 
         Relevance is the document's confidence for the matched topic: the core
         `acteu_topic.confidence` when matched as a core topic, the matching
@@ -386,8 +388,9 @@ class DocumentRepository:
         confidence (from `proxy_confidence`) when matched via a project proxy.
         Documents with no confidence rank below any confident match.
 
-        Returns up to `limit` dicts with keys: doc_id, platform, language,
-        published_time, plain_text, relevance (float | None)."""
+        Returns dicts with keys: doc_id, platform, language, published_time,
+        plain_text, relevance (float | None). Documents are relevance-ordered within
+        each platform; ordering across platforms is unspecified."""
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms,
             list(proxy_confidence) if proxy_confidence else None,
@@ -397,7 +400,12 @@ class DocumentRepository:
             self._relevance_stage(topic, proxy_confidence),
             # Sort confident matches first; documents with no confidence rank last.
             {"$sort": {"_relevance": -1, "_id": 1}},
-            {"$limit": limit},
+            # Keep the top `limit` documents of each platform (the preceding $sort
+            # order is preserved inside each platform's pushed array).
+            {"$group": {"_id": "$platform", "docs": {"$push": "$$ROOT"}}},
+            {"$project": {"docs": {"$slice": ["$docs", limit]}}},
+            {"$unwind": "$docs"},
+            {"$replaceRoot": {"newRoot": "$docs"}},
             {
                 "$project": {
                     "_id": 1,

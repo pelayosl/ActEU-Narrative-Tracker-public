@@ -179,11 +179,11 @@ class VisualisationService:
 
         slots = self._apportion_slots(weights, query.sample_size)
 
-        # Fetch a deep candidate pool per topic (already sorted by relevance). The
+        # Fetch a candidate pool per topic. The repository returns the top documents
+        # of every platform, so the pool is not dominated by whichever platform holds
+        # the highest-confidence documents. The pool is then reordered to interleave
+        # platforms, so a topic's slots are filled with a varied platform mix. The
         # final list is at most sample_size docs, so no topic can contribute more.
-        # Each pool is reordered to interleave platforms, so a topic's slots are
-        # filled with a varied platform mix rather than whichever platform happens
-        # to dominate its highest-confidence documents.
         pools: dict[str, list[dict]] = {}
         for topic in query.topics:
             docs = await self._document_repo.relevant_documents(
