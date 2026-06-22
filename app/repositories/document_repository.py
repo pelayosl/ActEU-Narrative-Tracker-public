@@ -438,16 +438,3 @@ class DocumentRepository:
             }
             async for doc in cursor
         ]
-
-    async def get_excerpt(self, doc_id: str) -> str:
-        try:
-            object_id = ObjectId(doc_id)
-        except (InvalidId, TypeError):
-            return ""
-
-        doc = await self._collection.find_one({"_id": object_id}, {"plain_text": 1})
-        plain_text = (doc or {}).get("plain_text", "")
-        plain_text = plain_text.strip()
-        if len(plain_text) > 250:
-            return f"{plain_text[:250].rstrip()}..."
-        return plain_text

@@ -14,6 +14,8 @@ def reconciliation_task(project_id: str, topics: list[dict]) -> dict:
 
 async def _run(project_id: str, topics: list[dict]) -> dict:
     parsed = [Topic(**t) for t in topics]
+    # Instantiated directly (not via task_context): LLMClient is stateless and
+    # opens/closes its own HTTP connection per call.
     reconciled, llm_available = LLMClient().reconcile(parsed)
 
     # When the LLM is unavailable, do NOT persist the fallback.

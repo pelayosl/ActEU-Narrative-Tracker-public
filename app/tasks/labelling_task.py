@@ -48,7 +48,8 @@ async def _label(
         classifier = await project_service.get_classifier(project_id, classifier_id)
         already_labelled = await project_service.get_labelled_doc_ids(project_id, classifier_id)
 
-    # Load FastText model
+    # Instantiated directly (not via task_context): owns no networked connection,
+    # just loads a local FastText model file.
     wrapper = ClassifierWrapper()
     wrapper.load(classifier.file_path)
 

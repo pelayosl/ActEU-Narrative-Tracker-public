@@ -1,3 +1,13 @@
+"""Per-invocation dependency contexts for Celery tasks (no FastAPI DI here).
+
+These context managers exist to own the lifecycle of the two networked backing
+services — Mongo and Redis — that are opened from a settings URL and must be
+closed in a `finally`. A dependency belongs here only if it holds such a
+connection (e.g. MutexManager wraps a Redis client). Stateless helpers
+(LLMClient) and local, self-closing resources (EmbeddingCache's SQLite file)
+are instantiated directly in the task instead.
+"""
+
 from contextlib import asynccontextmanager
 
 from pymongo import AsyncMongoClient
@@ -37,7 +47,8 @@ async def project_service_context():
 
 @asynccontextmanager
 async def mutex_manager_context():
-    """Async context manager for MutexManager, used by Celery tasks."""
+    """Async context manager for MutexManager, the only infrastructure class routed
+    through a context, because it wraps a Redis connection that must be closed."""
     redis = Redis.from_url(settings.REDIS_URL)
     try:
         yield MutexManager(redis)

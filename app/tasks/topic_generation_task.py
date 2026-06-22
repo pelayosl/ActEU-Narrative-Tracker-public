@@ -128,6 +128,8 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
 
     # Reuse previously computed vectors; embed only texts not already cached.
     # Keyed by text hash, so the cache survives DB reloads and de-duplicates texts.
+    # Not routed through task_context: it's a local, best-effort SQLite file that
+    # closes itself inline below, not a shared networked backing service.
     cache = EmbeddingCache(settings.EMBEDDING_CACHE_DIR, EMBEDDING_MODEL_NAME)
     try:
         cached, missing = cache.get_many(texts)
