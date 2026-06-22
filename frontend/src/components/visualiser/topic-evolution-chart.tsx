@@ -20,6 +20,12 @@ interface TopicEvolutionChartProps {
   topics: TopicSeriesMeta[];
 }
 
+// Reformat ISO dates (yyyy-mm-dd) to dd/mm/yyyy so the axis matches the query panel.
+function formatDate(value: string | number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
+}
+
 // One line per topic: X = day, Y = document count. Series are merged into a single
 // row per date, keyed by topic value, so missing days render as gaps.
 export function TopicEvolutionChart({ data, topics }: TopicEvolutionChartProps) {
@@ -49,13 +55,13 @@ export function TopicEvolutionChart({ data, topics }: TopicEvolutionChartProps) 
         <ResponsiveContainer width="100%" height={320}>
           <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9CA3AF" minTickGap={24} />
+            <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 12 }} stroke="#9CA3AF" minTickGap={24} />
             <YAxis
               tick={{ fontSize: 12 }}
               stroke="#9CA3AF"
               label={{ value: "Document Count", angle: -90, position: "insideLeft", style: { fontSize: 12, fill: "#6B7280" } }}
             />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} labelFormatter={formatDate} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             {topics.map((t) => (
               <Line

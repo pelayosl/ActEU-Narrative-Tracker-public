@@ -39,7 +39,7 @@ export function TopEntities({ data, topics }: TopEntitiesProps) {
 
   return (
     <section className="rounded-lg border border-border bg-white p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 font-semibold text-ink">
           <Network className="h-4 w-4 text-acteu-red" />
           Top Entities
@@ -59,13 +59,24 @@ export function TopEntities({ data, topics }: TopEntitiesProps) {
           </select>
         )}
       </div>
+      <p className="mb-4 text-sm text-muted-foreground">
+        People, places, and organisations most central to this topic. The relevance score
+        (0–1) reflects how connected each one is within the topic — higher means more central.
+      </p>
 
       {entities.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No entities for this topic.
         </p>
       ) : (
-        <ol className="space-y-2">
+        <>
+          <div className="mb-2 flex items-center gap-3 border-b border-border pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="w-5 text-right">#</span>
+            <span className="flex-1">Entity</span>
+            <span className="w-24 text-center">Relevance</span>
+            <span className="w-16 text-right">Score</span>
+          </div>
+          <ol className="space-y-2">
           {entities.map((e, i) => (
             <li key={e.entity} className="flex items-center gap-3">
               <span className="w-5 text-right text-sm tabular-nums text-muted-foreground">
@@ -86,7 +97,8 @@ export function TopEntities({ data, topics }: TopEntitiesProps) {
               </span>
             </li>
           ))}
-        </ol>
+          </ol>
+        </>
       )}
     </section>
   );
