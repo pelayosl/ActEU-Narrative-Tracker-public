@@ -54,6 +54,8 @@ class OllamaRepresentation(BaseRepresentation):
         self.llm_failed = False
 
     KEYWORD_LIMIT = 10
+    # Representative documents per cluster sent to the LLM for labelling.
+    REPR_DOC_LIMIT = 6
 
     '''
     * Built-in BERTopic representation model hook. Without it, BERTopic uses the raw
@@ -72,15 +74,20 @@ class OllamaRepresentation(BaseRepresentation):
         real_topics = [tid for tid in topics if tid != -1]
         self._topic_count_ref[0] = len(real_topics)
 
+        # Ask BERTopic for each cluster's most representative documents (closest to
+        # the c-TF-IDF centroid) rather than an arbitrary first-N slice — the same
+        # helper BERTopic's own LLM representations use. Returns {topic_id: [docs]}.
+        repr_docs_mappings, *_ = topic_model._extract_representative_docs(
+            c_tf_idf, documents, topics, nr_repr_docs=self.REPR_DOC_LIMIT
+        )
+
         updated: dict[int, list[tuple[str, float]]] = {}
         for topic_id, word_scores in topics.items():
             if topic_id == -1: # outlier cluster
                 updated[topic_id] = word_scores
                 continue
             keywords = [w for w, _ in word_scores[:self.KEYWORD_LIMIT]]
-            # Pull the cluster's documents from the `documents` DataFrame that
-            # BERTopic passes in (columns: Document / ID / Topic) for getting representative documents.
-            rep_docs = documents.loc[documents["Topic"] == topic_id, "Document"].head(4).tolist()
+            rep_docs = repr_docs_mappings.get(topic_id, [])
             name, description, llm_ok = _call_ollama(keywords, rep_docs)
             if not llm_ok:
                 self.llm_failed = True
@@ -219,7 +226,7 @@ def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str, bo
     """Returns (name, description, llm_ok). On any LLM failure, llm_ok is False and
     the labels fall back to the raw BERTopic keywords."""
     keywords_str = ", ".join(keywords[:20])
-    docs_str = "\n".join(f"- {doc[:300]}" for doc in rep_docs[:4])
+    docs_str = "\n".join(f"- {doc[:600]}" for doc in rep_docs[:6])
 
     prompt = (
         "You are a topic labelling assistant. Given keywords and representative documents "
