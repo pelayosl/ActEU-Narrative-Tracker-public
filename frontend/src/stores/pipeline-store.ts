@@ -192,6 +192,11 @@ export const usePipelineStore = create<PipelineState>((set) => ({
         reconciledTopics: pp.reconciled_topics,
         preReconcileTopics: pp.generated_topics,
         generationJobId: pp.generation_job_id || null,
+        // The original searchResult is not persisted, so derive the document
+        // count from the topic_mapping for every resumed path — it's needed once
+        // the user reaches the labelling step (whether already there or after
+        // training within this session).
+        resumedDocCount: countMappedDocs(pp.topic_mapping),
       };
 
       // Training already ran (classifier stamped) → resume at the labelling step.
@@ -203,7 +208,6 @@ export const usePipelineStore = create<PipelineState>((set) => ({
           ...base,
           currentStep: "label" as PipelineStep,
           trainedClassifier: classifier,
-          resumedDocCount: countMappedDocs(pp.topic_mapping),
         };
       }
 

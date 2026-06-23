@@ -132,6 +132,9 @@ describe("hydrateFromProject", () => {
     expect(st.currentStep).toBe("topics");
     expect(st.topicSubStep).toBe("generated");
     expect(st.generatedTopics).toHaveLength(1);
+    // Derived even before training so the doc count is correct if the user trains
+    // and reaches the labelling step within this resumed session.
+    expect(st.resumedDocCount).toBe(1);
   });
 
   it("resumes at the label step when the pipeline has a trained classifier", () => {
