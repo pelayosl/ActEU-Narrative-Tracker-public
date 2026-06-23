@@ -11,8 +11,14 @@ class TopicModellingService:
             {"project_id": project_id, "doc_ids": doc_ids},
         )
 
-    def submit_reconciliation(self, project_id: str, topics: list[dict]) -> str:
+    def submit_reconciliation(
+        self, project_id: str, topics: list[dict], passthrough_topics: list[dict] | None = None
+    ) -> str:
         return self._job_queue.dispatch(
             "app.tasks.reconciliation_task.reconciliation_task",
-            {"project_id": project_id, "topics": topics},
+            {
+                "project_id": project_id,
+                "topics": topics,
+                "passthrough_topics": passthrough_topics or [],
+            },
         )

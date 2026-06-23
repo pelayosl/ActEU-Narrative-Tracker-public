@@ -7,12 +7,17 @@ from app.tasks.celery_app import celery_app
 
 
 @celery_app.task
-def reconciliation_task(project_id: str, topics: list[dict]) -> dict:
+def reconciliation_task(
+    project_id: str, topics: list[dict], passthrough_topics: list[dict] | None = None
+) -> dict:
     """Reconcile topics via LLMClient and persist them in the project's pending pipeline."""
-    return asyncio.run(_run(project_id, topics))
+    return asyncio.run(_run(project_id, topics, passthrough_topics or []))
 
 
-async def _run(project_id: str, topics: list[dict]) -> dict:
+async def _run(
+    project_id: str, topics: list[dict], passthrough_topics: list[dict] | None = None
+) -> dict:
+    passthrough_topics = passthrough_topics or []
     parsed = [Topic(**t) for t in topics]
     # Instantiated directly (not via task_context): LLMClient is stateless and
     # opens/closes its own HTTP connection per call.
@@ -22,7 +27,10 @@ async def _run(project_id: str, topics: list[dict]) -> dict:
     if not llm_available:
         return ReconciliationResponse(topics=[], llm_available=False).model_dump()
 
-    async with project_service_context() as project_service:
-        await project_service.update_reconciled_topics(project_id, reconciled)
+    # Unselected topics are excluded from reconciliation but kept in the final list.
+    final_topics = reconciled + [Topic(**t) for t in passthrough_topics]
 
-    return ReconciliationResponse(topics=reconciled, llm_available=True).model_dump()
+    async with project_service_context() as project_service:
+        await project_service.update_reconciled_topics(project_id, final_topics)
+
+    return ReconciliationResponse(topics=final_topics, llm_available=True).model_dump()

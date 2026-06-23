@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SearchForm } from "./search-form";
@@ -53,6 +53,21 @@ export function StepSearch() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+
+  // Core topics arrive in relevant_topics as their db slug (e.g. "gender_issues").
+  // Resolve them to the display label so they read like the subtopic labels.
+  // Same cached query the search form uses (keyed by project).
+  const { data: topicFacets } = useQuery({
+    queryKey: ["project-topics", activeProject?.project_id],
+    queryFn: () => api.getProjectTopics(activeProject!.project_id, session?.accessToken),
+    enabled: Boolean(session?.accessToken && activeProject?.project_id),
+    staleTime: Infinity,
+  });
+
+  const resolveTopic = useMemo(() => {
+    const labels = new Map(topicFacets?.core_topics.map((t) => [t.value, t.label]));
+    return (topic: string) => labels.get(topic) ?? topic;
+  }, [topicFacets]);
 
   const search = useMutation({
     mutationFn: (query: SearchQuery) =>
@@ -126,6 +141,7 @@ export function StepSearch() {
                     doc={doc}
                     selected={doc.doc_id === selectedId}
                     onClick={() => setSelectedId(doc.doc_id)}
+                    resolveTopic={resolveTopic}
                   />
                 ))}
 
@@ -190,6 +206,18 @@ export function StepSearch() {
                       </span>
                     </div>
                     <h3 className="font-semibold text-ink">{selectedDoc.headline}</h3>
+                    {selectedDoc.relevant_topics.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {selectedDoc.relevant_topics.map((topic) => (
+                          <span
+                            key={topic}
+                            className="rounded-full border border-acteu-red/30 bg-acteu-red/5 px-2 py-0.5 text-xs font-medium text-acteu-red"
+                          >
+                            {resolveTopic(topic)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <p className="mt-2 text-sm text-muted-foreground">{selectedDoc.excerpt}</p>
                   </div>
                 ) : (

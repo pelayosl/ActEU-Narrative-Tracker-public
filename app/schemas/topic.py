@@ -27,7 +27,12 @@ class GenerateTopicsRequest(BaseModel):
 
 class ReconciliationRequest(BaseModel):
     project_id: str
+    # Topics the LLM should reconcile (merge among). When the user reconciles a
+    # selection, this is just that subset.
     topics: list[Topic]
+    # Topics excluded from reconciliation that must survive unchanged in the final
+    # reconciled list (the unselected topics). Empty when reconciling everything.
+    passthrough_topics: list[Topic] = []
 
 
 class GenerateTopicsResponse(BaseModel):

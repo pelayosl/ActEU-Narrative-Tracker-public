@@ -44,6 +44,29 @@ class TestReconciliationRun:
         persisted = project_service.update_reconciled_topics.call_args.args[1]
         assert [t.topic_id for t in persisted] == ["merged"]
 
+    async def test_passthrough_topics_kept_in_final_list(self):
+        # Selected topics get reconciled; unselected ones pass through unchanged.
+        reconciled = [make_topic(topic_id="merged", name="Merged")]
+        llm = Mock()
+        llm.reconcile.return_value = (reconciled, True)
+        project_service = AsyncMock()
+
+        with patch.object(task_mod, "LLMClient", return_value=llm), patch.object(
+            task_mod, "project_service_context", actx(project_service)
+        ):
+            result = await task_mod._run(
+                "proj-1",
+                [make_topic(topic_id="t1").model_dump()],
+                [make_topic(topic_id="kept").model_dump()],
+            )
+
+        # Only the selected topic was sent to the LLM.
+        assert [t.topic_id for t in llm.reconcile.call_args.args[0]] == ["t1"]
+        # The final/persisted list is reconciled + passthrough.
+        assert [t["topic_id"] for t in result["topics"]] == ["merged", "kept"]
+        persisted = project_service.update_reconciled_topics.call_args.args[1]
+        assert [t.topic_id for t in persisted] == ["merged", "kept"]
+
     async def test_does_not_persist_when_llm_unavailable(self):
         llm = Mock()
         # Fallback contract: unchanged input + llm_available False.

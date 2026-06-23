@@ -72,7 +72,7 @@ class FakeTopicModellingService:
     def submit_generation(self, project_id, doc_ids) -> str:
         return FAKE_JOB_ID
 
-    def submit_reconciliation(self, project_id, topics) -> str:
+    def submit_reconciliation(self, project_id, topics, passthrough_topics=None) -> str:
         return FAKE_JOB_ID
 
 

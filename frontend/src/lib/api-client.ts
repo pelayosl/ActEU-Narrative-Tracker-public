@@ -114,10 +114,22 @@ export const api = {
       { method: "POST", body: JSON.stringify({ project_id: projectId, doc_ids: docIds }) },
       token,
     ),
-  reconcileTopics: (projectId: string, topics: Topic[], token?: string) =>
+  reconcileTopics: (
+    projectId: string,
+    topics: Topic[],
+    token?: string,
+    passthroughTopics: Topic[] = [],
+  ) =>
     request<{ job_id: string }>(
       "/topics/reconcile",
-      { method: "POST", body: JSON.stringify({ project_id: projectId, topics }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          project_id: projectId,
+          topics,
+          passthrough_topics: passthroughTopics,
+        }),
+      },
       token,
     ),
 

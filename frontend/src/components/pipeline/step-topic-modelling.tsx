@@ -95,18 +95,27 @@ export function StepTopicModelling() {
     }
   }, [recJob, subStep, setReconciledTopics, setReconciliationJobId, setTopicSubStep]);
 
-  // Map generation ids → constituent names, for the "Fuses:" label on reconciled cards.
-  const nameByGenerationId = useMemo(() => {
-    const map = new Map<string, string>();
+  // Map generation ids → the pre-reconciliation card that owns them, for the
+  // "Fuses:" label on reconciled cards.
+  const topicByGenerationId = useMemo(() => {
+    const map = new Map<string, Topic>();
     for (const t of preReconcile) {
-      for (const id of generationIds(t)) map.set(id, t.name);
+      for (const id of generationIds(t)) map.set(id, t);
     }
     return map;
   }, [preReconcile]);
 
   function fusesLabel(topic: Topic): string | undefined {
-    if (topic.origin_topic_ids.length < 2) return undefined;
-    const names = [...new Set(topic.origin_topic_ids.map((id) => nameByGenerationId.get(id) ?? "?"))];
+    // Only label genuine LLM fusions of 2+ distinct pre-reconciliation cards.
+    // A manually merged card carries several generation ids but resolves to a
+    // single source card, so it must not show a (self-referential) "Fuses" label.
+    const sources = new Set(
+      topic.origin_topic_ids.map((id) => topicByGenerationId.get(id)?.topic_id ?? id),
+    );
+    if (sources.size < 2) return undefined;
+    const names = [
+      ...new Set(topic.origin_topic_ids.map((id) => topicByGenerationId.get(id)?.name ?? "?")),
+    ];
     return names.join(" + ");
   }
 
@@ -114,11 +123,17 @@ export function StepTopicModelling() {
     if (!activeProject) return;
     setError(null);
     setNotice(null);
+    // No selection → reconcile every topic. A selection → reconcile only those,
+    // passing the rest through unchanged so they survive in the final list.
+    const hasSelection = selected.length > 0;
+    const toReconcile = hasSelection ? generated.filter((t) => selected.includes(t.topic_id)) : generated;
+    const passthrough = hasSelection ? generated.filter((t) => !selected.includes(t.topic_id)) : [];
     try {
       const { job_id } = await api.reconcileTopics(
         activeProject.project_id,
-        generated,
+        toReconcile,
         session?.accessToken,
+        passthrough,
       );
       beginReconciliation(job_id);
     } catch {
@@ -234,8 +249,9 @@ export function StepTopicModelling() {
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={topics.length === 0} onClick={handleReconcile}>
-            Reconcile Topics
+          {/* A single selected topic has nothing to reconcile against. */}
+          <Button disabled={topics.length === 0 || selected.length === 1} onClick={handleReconcile}>
+            {selected.length >= 2 ? `Reconcile Selected (${selected.length})` : "Reconcile Topics"}
           </Button>
           <Button variant="outline" disabled={topics.length === 0} onClick={() => setStep("label")}>
             Skip to Labelling →

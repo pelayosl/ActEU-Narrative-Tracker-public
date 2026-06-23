@@ -34,6 +34,7 @@ export function StepLabelDataset() {
   const setPhase1Result = usePipelineStore((s) => s.setPhase1Result);
   const setPhase2Result = usePipelineStore((s) => s.setPhase2Result);
   const resumedDocCount = usePipelineStore((s) => s.resumedDocCount);
+  const setStep = usePipelineStore((s) => s.setStep);
   const setPrefill = useVisualiserStore((s) => s.setPrefill);
 
   // Train on the reconciled topics if reconciliation ran, otherwise the raw list.
@@ -328,6 +329,15 @@ export function StepLabelDataset() {
           </section>
         </>
       )}
+
+      {/* Exit the pipeline back to the search form. Like the cancel buttons on the
+          earlier steps, but lands on search rather than the previous step. The
+          pending pipeline still resumes here on re-entry (until phase 1 labelling). */}
+      <div>
+        <Button variant="primary" size="lg" onClick={() => setStep("search")}>
+          Exit the pipeline
+        </Button>
+      </div>
     </div>
   );
 }
