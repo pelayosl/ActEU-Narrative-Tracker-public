@@ -262,5 +262,5 @@ def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str, bo
         return parsed["name"], parsed["description"], True
     except Exception as e:
         logger.warning("Ollama call failed (%s), using fallback", e)
-        name = keywords[0].capitalize() if keywords else "Unknown"
+        name = "-".join(keywords[:3]) if keywords else "Unknown"
         return name, ", ".join(keywords[:10]), False
