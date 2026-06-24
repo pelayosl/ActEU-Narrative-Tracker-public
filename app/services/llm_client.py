@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 
@@ -6,6 +7,8 @@ import httpx
 
 from app.config import settings
 from app.schemas.topic import Topic
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -60,6 +63,10 @@ class LLMClient:
             parsed = _extract_json(raw)
             return _build_topics(parsed, valid_ids, topics), True
         except Exception:
+            logger.warning(
+                "LLM reconciliation failed; returning fallback (llm_available=False)",
+                exc_info=True,
+            )
             return _fallback(topics), False
 
 
