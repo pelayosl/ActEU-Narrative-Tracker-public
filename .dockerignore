@@ -41,3 +41,4 @@ memory/
 temp_download/
 *.md
 TFG-BUDGET.xlsx
+db/
