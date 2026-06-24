@@ -1,0 +1,43 @@
+# Keep secrets, local tooling and build junk out of the api/worker images.
+# The Dockerfile uses `COPY . .`, so anything not excluded here is baked in.
+
+# Secrets / certificates — must never enter an image
+.env
+.env.*
+certs/
+
+# Version control
+.git
+.gitignore
+
+# Python virtualenv / caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / frontend build (frontend has its own image)
+frontend/node_modules/
+frontend/.next/
+node_modules/
+
+# Tests (not needed at runtime)
+tests/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Project meta not needed in the image
+plantuml/
+z_context/
+memory/
+temp_download/
+*.md
+TFG-BUDGET.xlsx

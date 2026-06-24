@@ -1,0 +1,115 @@
+# Production deployment for the ActEU Narrative Tracker.
+#
+# Topology:  browser --HTTPS:443--> nginx --> frontend (Next.js BFF) --> api (FastAPI)
+# Only nginx publishes ports to the host. mongo, redis, api and frontend are
+# reachable exclusively over the internal `acteu_net` docker network, so the
+# backend is never directly exposed.
+#
+# Usage:  docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - acteu_net
+    # No host port: only reachable from other containers on acteu_net.
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - acteu_net
+    # No host port.
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DATA_DIR: /data/db_import
+    volumes:
+      - ${DATA_DIR}:/data/db_import:ro
+      - classifier_data:/app/classifiers
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - acteu_net
+    # No host port: reached only via the Next.js BFF over acteu_net.
+
+  worker:
+    build:
+      context: .
+      args:
+        REQUIREMENTS: requirements-nlp.txt
+    restart: unless-stopped
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    env_file: .env
+    environment:
+      MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_AUTODISCOVER: "1"
+    volumes:
+      - classifier_data:/app/classifiers
+      - embedding_cache:/app/embedding_cache
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - acteu_net
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # The BFF route forwards browser calls to FastAPI server-side.
+      BACKEND_URL: http://api:8000
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    depends_on:
+      - api
+    networks:
+      - acteu_net
+    # No host port: reached only via nginx over acteu_net.
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+    networks:
+      - acteu_net
+
+networks:
+  acteu_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:
+  classifier_data:
+  embedding_cache:

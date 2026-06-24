@@ -1,0 +1,28 @@
+# Keep local deps, build output and secrets out of the frontend image.
+# Dependencies are installed inside the image via `npm ci`.
+
+node_modules/
+.next/
+out/
+
+# Secrets / local env (runtime env is injected by docker compose)
+.env
+.env.*
+!.env.local.example
+
+# Tests / coverage
+coverage/
+*.test.ts
+*.test.tsx
+
+# Version control / IDE / OS
+.git
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Misc
+npm-debug.log*
+README.md
