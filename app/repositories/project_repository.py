@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from app.schemas.classification import ClassifierMetadata, DocumentProxy
 from app.schemas.project import PendingPipeline, Project
@@ -9,7 +9,7 @@ from pymongo import UpdateOne
 
 
 class ProjectRepository:
-    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+    def __init__(self, db: AsyncDatabase) -> None:
         self._collection = db["projects"]
 
     async def save(self, project: Project) -> None:
@@ -54,6 +54,24 @@ class ProjectRepository:
             return [ClassifierMetadata.model_validate(c) for c in doc["classifiers"]]
         return []
 
+    async def delete_classifier(self, project_id: str, classifier_id: str) -> None:
+        """Remove the classifier and every document-proxy label it produced, then drop
+        any proxy left with no labels. Mirrors the full cascade of project deletion."""
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {
+                "$pull": {
+                    "classifiers": {"classifier_id": classifier_id},
+                    "document_proxies.$[].labels": {"classifier_id": classifier_id},
+                }
+            },
+        )
+        # Second pass: prune proxies whose labels are now empty.
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {"$pull": {"document_proxies": {"labels": {"$size": 0}}}},
+        )
+
     async def filter_proxy_doc_ids_by_subtopics(
         self,
         project_id: str,
@@ -91,13 +109,16 @@ class ProjectRepository:
                 result[proxy["doc_id"]] = matching_names
         return result
 
-    async def find_proxy_doc_ids_by_topics(
+    async def find_proxy_confidence_by_topics(
         self,
         project_id: str,
         topics: list[str],
-    ) -> dict[str, list[str]]:
-        """Maps each requested topic_id to the list of doc_ids whose project proxies carry a
-        label for it. Topics with no proxy matches are omitted from the result."""
+    ) -> dict[str, dict[str, float]]:
+        """Maps each requested topic_id to a {doc_id: confidence} map drawn from the
+        project's document proxies. A topic_id appears at most once per proxy (it is a
+        unique UUID, and labelling guards against duplicate (topic_id, classifier_id)
+        labels), so each doc contributes a single confidence. Topics with no proxy
+        matches are omitted from the result."""
         doc = await self._collection.find_one(
             {"project_id": project_id},
             {"document_proxies": 1},
@@ -105,18 +126,26 @@ class ProjectRepository:
         if not doc:
             return {}
         topics_set = set(topics)
-        result: dict[str, list[str]] = {}
+        result: dict[str, dict[str, float]] = {}
         for proxy in doc.get("document_proxies", []):
             for label in proxy.get("labels", []):
                 topic_id = label.get("topic_id")
-                if topic_id in topics_set:
-                    result.setdefault(topic_id, []).append(proxy["doc_id"])
+                confidence = label.get("confidence")
+                if topic_id not in topics_set or confidence is None:
+                    continue
+                result.setdefault(topic_id, {})[proxy["doc_id"]] = confidence
         return result
 
     async def set_pending_pipeline(self, project_id: str, pipeline: PendingPipeline) -> None:
         await self._collection.update_one(
             {"project_id": project_id},
             {"$set": {"pending_pipeline": pipeline.model_dump()}},
+        )
+
+    async def stamp_pipeline_classifier(self, project_id: str, classifier_id: str) -> None:
+        await self._collection.update_one(
+            {"project_id": project_id},
+            {"$set": {"pending_pipeline.classifier_id": classifier_id}},
         )
 
     async def update_reconciled_topics(

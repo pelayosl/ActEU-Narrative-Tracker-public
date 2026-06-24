@@ -1,13 +1,13 @@
 from bson import ObjectId
 from bson.errors import InvalidId
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from app.config import settings
 from app.schemas.search import SearchQuery
 
 
 class DocumentRepository:
-    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+    def __init__(self, db: AsyncDatabase) -> None:
         self._collection = db["documents"]
 
     def _build_filter(
@@ -84,6 +84,11 @@ class DocumentRepository:
         cursor = self._collection.find({"_id": {"$in": object_ids}})
         return [doc async for doc in cursor]
 
+    async def distinct_languages(self) -> list[str]:
+        """Every language value present in at least one document, sorted."""
+        languages = await self._collection.distinct("language")
+        return sorted(lang for lang in languages if lang)
+
     async def count(
         self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
     ) -> int:
@@ -102,13 +107,17 @@ class DocumentRepository:
         """Match stage for a single visualisation topic.
 
         A document matches the topic when it carries it as a core topic
-        (`acteu_topic.label`), as a db subtopic (`subtopics.label`), or when its
-        id is among the project proxy doc_ids resolved for that topic. The
-        date/language/platform constraints apply uniformly to every source.
+        (`acteu_topic.label` == slug), as a db subtopic (`subtopics.topic_id` == the
+        subtopic UUID), or when its id is among the project proxy doc_ids resolved for
+        that topic. The date/language/platform constraints apply uniformly to every
+        source. Core topics arrive as their slug; subtopics as their topic_id.
+
+        Essentially:
+        {"$or": [{"acteu_topic.label": topic}, {"subtopics.topic_id": topic}, {"_id": {"$in": object_ids}}]}
         """
         topic_clauses: list[dict] = [
             {"acteu_topic.label": topic},
-            {"subtopics.label": topic},
+            {"subtopics.topic_id": topic},
         ]
         if proxy_doc_ids:
             object_ids = self._coerce_object_ids(proxy_doc_ids)
@@ -159,7 +168,7 @@ class DocumentRepository:
             },
             {"$sort": {"_id": 1}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [{"date": doc["_id"], "count": doc["count"]} async for doc in cursor]
 
     async def topic_presence_by_language(
@@ -181,7 +190,7 @@ class DocumentRepository:
             {"$group": {"_id": "$language", "count": {"$sum": 1}}},
             {"$sort": {"count": -1, "_id": 1}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [
             {"language": doc["_id"], "count": doc["count"]} async for doc in cursor
         ]
@@ -205,7 +214,7 @@ class DocumentRepository:
             {"$group": {"_id": "$platform", "count": {"$sum": 1}}},
             {"$sort": {"count": -1, "_id": 1}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [
             {"platform": doc["_id"], "count": doc["count"]} async for doc in cursor
         ]
@@ -229,13 +238,135 @@ class DocumentRepository:
             {"$match": match},
             {"$project": {"_id": 0, "entities": "$named_entities.text"}},
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         result: list[list[str]] = []
         async for doc in cursor:
             entities = doc.get("entities") or []
             if entities:
                 result.append(entities)
         return result
+
+    @staticmethod
+    def _relevance_stage(
+        topic: str, proxy_confidence: dict[str, float] | None = None
+    ) -> dict:
+        '''
+        Builds a MongoDB aggregation stage to compute a document-level
+        relevance score for a given topic. Adds a _relevance field.
+
+        Precedence: ActEU core topic (acteu_topic.label == slug) -> acteu_topic.confidence;
+        otherwise the matching subtopics[].confidence (matched by subtopics.topic_id);
+        otherwise, when the document matched via a project proxy for this topic, the proxy
+        confidence (passed in `proxy_confidence` as a {doc_id: confidence} map); else None.
+        '''
+        doc_relevance = {
+            "$cond": [
+                {"$eq": ["$acteu_topic.label", topic]},
+                "$acteu_topic.confidence",
+                {
+                    "$let": {
+                        "vars": {
+                            "matched": {
+                                "$filter": {
+                                    "input": {"$ifNull": ["$subtopics", []]},
+                                    "as": "s",
+                                    "cond": {"$eq": ["$$s.topic_id", topic]},
+                                }
+                            }
+                        },
+                        "in": {
+                            "$cond": [
+                                {"$gt": [{"$size": "$$matched"}, 0]},
+                                {"$max": "$$matched.confidence"},
+                                None,
+                            ]
+                        },
+                    }
+                },
+            ]
+        }
+
+        if not proxy_confidence:
+            relevance: dict = doc_relevance
+        else:
+            # Fall back to the proxy confidence: look the document up in the
+            # {doc_id: confidence} map by its stringified _id, using two parallel
+            # literal arrays (index in ids -> confidence at the same index).
+            #
+            # MongoDB aggregation expressions do not support direct key-based lookup, 
+            # hence the separation into arrays to simulate the dictionary.
+            ids = list(proxy_confidence.keys())
+            confidences = [proxy_confidence[doc_id] for doc_id in ids]
+            proxy_lookup = {
+                "$let": {
+                    "vars": {
+                        "idx": {
+                            "$indexOfArray": [
+                                {"$literal": ids},
+                                {"$toString": "$_id"}, # Current doc id, converted to str
+                            ]
+                        }
+                    },
+                    "in": {
+                        "$cond": [
+                            {"$gte": ["$$idx", 0]},
+                            # Return confidence value at index idx in the confidences array
+                            {"$arrayElemAt": [{"$literal": confidences}, "$$idx"]},
+                            None,
+                        ]
+                    },
+                }
+            }
+            relevance = {"$ifNull": [doc_relevance, proxy_lookup]}
+
+        return {"$addFields": {"_relevance": relevance}}
+
+    async def mean_topic_confidence(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_confidence: dict[str, float] | None = None,
+    ) -> float | None:
+        """Mean classifier confidence for a topic across all matching documents.
+
+        Averages the per-document confidence for the matched topic (core, db-subtopic
+        or project-proxy confidence). Returns `None` when no document has a confidence
+        for the topic."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms,
+            list(proxy_confidence) if proxy_confidence else None,
+        )
+        pipeline = [
+            {"$match": match}, # Filter, selects documents matching constraints
+            self._relevance_stage(topic, proxy_confidence), # Compute topic relevance for each selected document
+            {"$match": {"_relevance": {"$ne": None}}}, # Remove docs with None relevance
+            {"$group": {"_id": None, "mean": {"$avg": "$_relevance"}}}, # Compute average relevance
+        ]
+        cursor = await self._collection.aggregate(pipeline)
+        async for doc in cursor:
+            return doc.get("mean")
+        return None
+
+    async def count_topic_documents(
+        self,
+        topic: str,
+        date_from,
+        date_to,
+        languages: list[str],
+        platforms: list[str],
+        proxy_doc_ids: list[str] | None = None,
+    ) -> int:
+        """Number of documents matching a topic under the visualisation constraints.
+
+        Counts every document that carries the topic (core, db-subtopic or project
+        proxy), regardless of confidence. Returns 0 when nothing matches."""
+        match = self._build_vis_match(
+            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+        )
+        return await self._collection.count_documents(match)
 
     async def relevant_documents(
         self,
@@ -244,57 +375,46 @@ class DocumentRepository:
         date_to,
         languages: list[str],
         platforms: list[str],
-        proxy_doc_ids: list[str] | None = None,
+        proxy_confidence: dict[str, float] | None = None,
         limit: int = 10,
     ) -> list[dict]:
-        """Top documents for a topic ranked by their confidence for that topic.
+        """Top documents for a topic ranked by their confidence for that topic, taking
+        up to `limit` documents *per platform* so every platform present among the
+        matches is represented (callers can then interleave/trim across platforms).
 
         Relevance is the document's confidence for the matched topic: the core
         `acteu_topic.confidence` when matched as a core topic, the matching
-        `subtopics[].confidence` when matched as a db subtopic, or `None` when the
-        document only matched via a project proxy id (Phase-1 proxies carry no
-        confidence). Documents with no confidence rank below any confident match.
+        `subtopics[].confidence` when matched as a db subtopic, or the project proxy
+        confidence (from `proxy_confidence`) when matched via a project proxy.
+        Documents with no confidence rank below any confident match.
 
-        Returns up to `limit` dicts with keys: doc_id, platform, language,
-        published_time, plain_text, relevance (float | None)."""
+        Returns dicts with keys: doc_id, platform, language, published_time,
+        plain_text, relevance (float | None). Documents are relevance-ordered within
+        each platform; ordering across platforms is unspecified."""
         match = self._build_vis_match(
-            topic, date_from, date_to, languages, platforms, proxy_doc_ids
+            topic, date_from, date_to, languages, platforms,
+            list(proxy_confidence) if proxy_confidence else None,
         )
         pipeline = [
             {"$match": match},
+            self._relevance_stage(topic, proxy_confidence),
+            # Keep only the top `limit` documents of each platform, ranked by
+            # relevance (confident matches first; no-confidence docs rank last).
+            # $topN is memory-bounded to `limit` docs per platform, to avoid memory overflows.
             {
-                "$addFields": {
-                    "_relevance": {
-                        "$cond": [
-                            {"$eq": ["$acteu_topic.label", topic]},
-                            "$acteu_topic.confidence",
-                            {
-                                "$let": {
-                                    "vars": {
-                                        "matched": {
-                                            "$filter": {
-                                                "input": {"$ifNull": ["$subtopics", []]},
-                                                "as": "s",
-                                                "cond": {"$eq": ["$$s.label", topic]},
-                                            }
-                                        }
-                                    },
-                                    "in": {
-                                        "$cond": [
-                                            {"$gt": [{"$size": "$$matched"}, 0]},
-                                            {"$max": "$$matched.confidence"},
-                                            None,
-                                        ]
-                                    },
-                                }
-                            },
-                        ]
-                    }
+                "$group": {
+                    "_id": "$platform",
+                    "docs": {
+                        "$topN": {
+                            "n": limit,
+                            "sortBy": {"_relevance": -1, "_id": 1},
+                            "output": "$$ROOT",
+                        }
+                    },
                 }
             },
-            # Sort confident matches first; documents with no confidence rank last.
-            {"$sort": {"_relevance": -1, "_id": 1}},
-            {"$limit": limit},
+            {"$unwind": "$docs"},
+            {"$replaceRoot": {"newRoot": "$docs"}},
             {
                 "$project": {
                     "_id": 1,
@@ -306,7 +426,7 @@ class DocumentRepository:
                 }
             },
         ]
-        cursor = self._collection.aggregate(pipeline)
+        cursor = await self._collection.aggregate(pipeline)
         return [
             {
                 "doc_id": str(doc["_id"]),
@@ -318,16 +438,3 @@ class DocumentRepository:
             }
             async for doc in cursor
         ]
-
-    async def get_excerpt(self, doc_id: str) -> str:
-        try:
-            object_id = ObjectId(doc_id)
-        except (InvalidId, TypeError):
-            return ""
-
-        doc = await self._collection.find_one({"_id": object_id}, {"plain_text": 1})
-        plain_text = (doc or {}).get("plain_text", "")
-        plain_text = plain_text.strip()
-        if len(plain_text) > 250:
-            return f"{plain_text[:250].rstrip()}..."
-        return plain_text

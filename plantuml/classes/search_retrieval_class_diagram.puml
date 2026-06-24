@@ -1,0 +1,104 @@
+@startuml search_retrieval_subsystem
+' =====================================================================
+'  Search and Retrieval Subsystem
+'  Covers: faceted search query composition, confidence-threshold
+'  filtering, result formatting, full-text bulk fetch, and language
+'  facet population. Distinct from storage: business logic for
+'  query building and result shaping lives here, not in the repository.
+' =====================================================================
+
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+skinparam class {
+    BackgroundColor<<external>> #F0F0F0
+    BorderColor<<external>>     #AAAAAA
+    FontColor<<external>>       #666666
+}
+
+' =====================================================================
+'  EXTERNAL DEPENDENCIES
+' =====================================================================
+package "External" {
+    class DocumentRepository <<external>> {
+        +find(query, proxy_doc_ids) : list<dict>
+        +find_by_ids(doc_ids) : list<dict>
+        +count(query, proxy_doc_ids) : int
+        +distinct_languages() : list<str>
+    }
+}
+
+' =====================================================================
+'  SERVICE
+' =====================================================================
+package "app.services" {
+    class SearchService {
+        -_document_repo : DocumentRepository
+        +search(query : SearchQuery, proxy_doc_ids : list<str>) : SearchResult
+        +get_documents_by_ids(doc_ids : list<str>) : list<Document>
+        +get_available_languages() : list<str>
+        -_matched_subtopic_labels(doc : dict, query : SearchQuery) : list<str>
+        -_to_summary(doc : dict, query : SearchQuery) : DocumentSummary
+    }
+}
+
+' =====================================================================
+'  SCHEMAS
+' =====================================================================
+package "app.schemas.search" {
+    class SearchQuery {
+        +keywords : list<str>
+        +date_from : datetime
+        +date_to : datetime
+        +languages : list<str>
+        +platforms : list<str>
+        +topics : list<str>
+        +subtopics : list<str>
+        +confidence_threshold : float
+    }
+
+    class SearchResult {
+        +total_docs : int
+    }
+
+    class DocumentSummary {
+        +doc_id : str
+        +headline : str
+        +excerpt : str
+        +platform : str
+        +language : str
+        +date : datetime
+        +relevant_topics : list<str>
+    }
+
+    class SearchTopics {
+        +core_topics : list<TopicChoice>
+        +subtopics : list<TopicChoice>
+    }
+
+    class TopicChoice {
+        +topic_id : str
+        +name : str
+        +core_topic : str
+    }
+}
+
+' =====================================================================
+'  RELATIONSHIPS
+' =====================================================================
+
+' --- structural (solid) ---
+SearchService --> DocumentRepository
+
+' --- schema composition ---
+SearchResult *-- "0..*" DocumentSummary
+SearchTopics *-- "0..*" TopicChoice
+
+' --- service -> schemas ---
+SearchService ..> SearchQuery
+SearchService ..> SearchResult
+SearchService ..> DocumentSummary
+
+@enduml

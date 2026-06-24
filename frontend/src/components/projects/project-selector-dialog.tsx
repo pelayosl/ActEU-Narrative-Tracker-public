@@ -7,7 +7,7 @@ import { FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import { useProjectStore } from "@/stores/project-store";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +37,7 @@ export function ProjectSelectorDialog() {
       setActiveProject(project);
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Failed to create project.");
+      setError(errorMessage(err, "Failed to create project."));
     },
   });
 
@@ -107,7 +107,7 @@ export function ProjectSelectorDialog() {
             ))}
           </select>
           {projectsQuery.isError && (
-            <p className="text-sm text-acteu-red">Could not load projects.</p>
+            <p className="text-sm text-acteu-red">{errorMessage(projectsQuery.error, "Could not load projects.")}</p>
           )}
           {error && <p className="text-sm text-acteu-red">{error}</p>}
           <Button onClick={openExisting} disabled={!selectedId} className="w-full">

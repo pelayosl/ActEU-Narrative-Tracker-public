@@ -24,6 +24,7 @@ services:
       DATA_DIR: /data/db_import
     volumes:
       - ${DATA_DIR}:/data/db_import:ro
+      - classifier_data:/app/classifiers
     depends_on:
       - mongo
       - redis
@@ -39,6 +40,7 @@ services:
       CELERY_AUTODISCOVER: "1"
     volumes:
       - classifier_data:/app/classifiers
+      - embedding_cache:/app/embedding_cache
     depends_on:
       - mongo
       - redis
@@ -46,3 +48,4 @@ services:
 volumes:
   mongo_data:
   classifier_data:
+  embedding_cache:

@@ -5,7 +5,7 @@ import pytest
 from bson import ObjectId
 
 from app.schemas.search import SearchQuery, SearchResult
-from app.services.search_service import SearchService
+from app.services.search_service import EXCERPT_CHARS, SearchService
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +120,33 @@ class TestToSummary:
         assert summary.headline == "My headline"
         assert summary.platform == "telegram"
         assert summary.language == "de"
+        assert summary.date == datetime(2024, 3, 1, tzinfo=timezone.utc)
+
+    async def test_datetime_published_time_preserved(self, service, repo):
+        when = datetime(2023, 9, 8, 14, 8, 16, tzinfo=timezone.utc)
+        repo.find.return_value = [make_raw_doc(published_time=when)]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery())
+        assert result.retrieved_docs[0].date == when
+
+    async def test_unparseable_string_published_time_becomes_none(self, service, repo):
+        # Legacy/malformed value the loader/migration could not convert to a Date
+        # (Spanish locale). Must not fail the whole batch — date falls back to None.
+        repo.find.return_value = [make_raw_doc(published_time="vie, 08 sep 2023 14:08:16 +0200")]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery())
+        assert result.retrieved_docs[0].date is None
+
+    async def test_missing_published_time_yields_none_date(self, service, repo):
+        doc = make_raw_doc()
+        doc.pop("published_time", None)
+        repo.find.return_value = [doc]
+        repo.count.return_value = 1
+
+        result = await service.search(SearchQuery())
+        assert result.retrieved_docs[0].date is None
 
     async def test_short_text_returned_verbatim(self, service, repo):
         repo.find.return_value = [make_raw_doc(plain_text="Short content.")]
@@ -129,16 +156,16 @@ class TestToSummary:
         assert result.retrieved_docs[0].excerpt == "Short content."
 
     async def test_long_text_truncated_with_ellipsis(self, service, repo):
-        repo.find.return_value = [make_raw_doc(plain_text="A" * 300)]
+        repo.find.return_value = [make_raw_doc(plain_text="A" * (EXCERPT_CHARS + 50))]
         repo.count.return_value = 1
 
         result = await service.search(SearchQuery())
         excerpt = result.retrieved_docs[0].excerpt
         assert excerpt.endswith("...")
-        assert len(excerpt) <= 253
+        assert len(excerpt) <= EXCERPT_CHARS + 3
 
-    async def test_exactly_250_chars_not_truncated(self, service, repo):
-        text = "B" * 250
+    async def test_exactly_limit_chars_not_truncated(self, service, repo):
+        text = "B" * EXCERPT_CHARS
         repo.find.return_value = [make_raw_doc(plain_text=text)]
         repo.count.return_value = 1
 
@@ -146,13 +173,15 @@ class TestToSummary:
         assert result.retrieved_docs[0].excerpt == text
 
     async def test_truncation_rstrips_trailing_whitespace(self, service, repo):
-        repo.find.return_value = [make_raw_doc(plain_text="A" * 249 + " " + "B" * 100)]
+        # Last kept char (index EXCERPT_CHARS-1) is a space, so it gets rstripped
+        # before the ellipsis is appended.
+        text = "A" * (EXCERPT_CHARS - 1) + " " + "B" * 100
+        repo.find.return_value = [make_raw_doc(plain_text=text)]
         repo.count.return_value = 1
 
         result = await service.search(SearchQuery())
         excerpt = result.retrieved_docs[0].excerpt
-        # Position 249 is a space, gets rstripped before the ellipsis is appended.
-        assert excerpt == "A" * 249 + "..."
+        assert excerpt == "A" * (EXCERPT_CHARS - 1) + "..."
 
     async def test_plain_text_is_stripped(self, service, repo):
         repo.find.return_value = [make_raw_doc(plain_text="   hello   ")]

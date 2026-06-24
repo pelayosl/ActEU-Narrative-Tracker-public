@@ -2,24 +2,42 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, FolderKanban, BarChart3 } from "lucide-react";
+import { LayoutGrid, FolderKanban, BarChart3, PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui-store";
 import { ProfileMenu } from "./profile-menu";
 
 const items = [
   { href: "/pipeline", label: "Pipeline", icon: LayoutGrid },
   { href: "/projects", label: "Project Library", icon: FolderKanban },
-  { href: "/visualizer", label: "Visualizer", icon: BarChart3 },
+  { href: "/visualiser", label: "Visualiser", icon: BarChart3 },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+
+  if (!sidebarOpen) return null;
 
   return (
     <aside className="flex w-60 flex-col border-r border-border bg-white">
       <div className="flex items-center justify-between p-4">
-        <span className="text-lg font-semibold text-acteu-red">ActEU</span>
-        <ProfileMenu />
+        <Link
+          href="/home"
+          className="text-lg font-semibold text-acteu-red transition-opacity hover:opacity-80"
+          aria-label="Go to home page"
+        >
+          ActEU
+        </Link>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="rounded-md p-1 text-ink transition-colors hover:bg-bg"
+          aria-label="Hide sidebar"
+        >
+          <PanelLeftClose className="h-5 w-5" />
+        </button>
       </div>
       <nav className="flex-1 space-y-1 p-2">
         {items.map(({ href, label, icon: Icon }) => {
@@ -39,6 +57,9 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="border-t border-border p-2">
+        <ProfileMenu />
+      </div>
     </aside>
   );
 }

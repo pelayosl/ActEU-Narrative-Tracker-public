@@ -1,11 +1,11 @@
 import type {
   AuthToken,
   Dashboard,
-  JobStatus,
   LabellingResult,
   Project,
   SearchQuery,
   SearchResult,
+  SearchTopics,
   Topic,
   UserPublic,
   VisualisationQuery,
@@ -21,6 +21,25 @@ export class ApiError extends Error {
   }
 }
 
+// The backend returns 503 when MongoDB is unreachable (see app/main.py). The UI
+// uses this to tell the user the database is down rather than blaming their query.
+export function isDatabaseUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 503;
+}
+
+export const DB_UNAVAILABLE_MESSAGE =
+  "The database is currently unavailable. Please try again in a few moments.";
+
+// Sentinel relayed from the NextAuth authorize() callback (see lib/auth.ts) to the
+// login form via NextAuth's res.error, so login can show the DB-down message on a 503.
+// Lives here (client-safe) so the client doesn't import the server-only auth module.
+export const DB_UNAVAILABLE_ERROR = "DatabaseUnavailable";
+
+// Picks the DB-down message for a 503, otherwise the caller's context-specific fallback.
+export function errorMessage(error: unknown, fallback: string): string {
+  return isDatabaseUnavailable(error) ? DB_UNAVAILABLE_MESSAGE : fallback;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
@@ -32,6 +51,10 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   });
   if (!res.ok) {
     throw new ApiError(res.status, `API error ${res.status}: ${await res.text()}`);
+  }
+  // 204 / empty-body responses (e.g. DELETE) have no JSON to parse.
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
   }
   return res.json() as Promise<T>;
 }
@@ -58,47 +81,85 @@ export const api = {
   deleteProject: (id: string, token?: string) =>
     request<void>(`/projects/${id}`, { method: "DELETE" }, token),
 
-  // Search
-  search: (query: SearchQuery) =>
-    request<SearchResult>("/search", { method: "POST", body: JSON.stringify(query) }),
+  // Classifiers (scoped to a project)
+  deleteClassifier: (projectId: string, classifierId: string, token?: string) =>
+    request<void>(`/projects/${projectId}/classifiers/${classifierId}`, { method: "DELETE" }, token),
+  // Fetches the .bin as a Blob with auth (a plain <a> can't send the bearer token).
+  downloadClassifier: async (projectId: string, classifierId: string, token?: string): Promise<Blob> => {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/classifiers/${classifierId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, `API error ${res.status}`);
+    return res.blob();
+  },
 
-  // Topic modelling (returns job_id, stream via SSE)
-  generateTopics: (projectId: string, docIds: string[]) =>
-    request<{ job_id: string }>("/topics/generate", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, doc_ids: docIds }),
-    }),
-  reconcileTopics: (projectId: string, topics: Topic[]) =>
-    request<{ job_id: string }>("/topics/reconcile", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, topics }),
-    }),
+  // Search facets — languages present in at least one document (dynamic, like topics)
+  listLanguages: (token?: string) => request<string[]>("/search/languages", {}, token),
+  // Search-form topic facets (core topics + db ∪ project subtopics), DB-sourced.
+  getProjectTopics: (projectId: string, token?: string) =>
+    request<SearchTopics>(`/projects/${projectId}/topics`, {}, token),
+
+  // Search — project_id is needed only so project-scoped subtopics can be resolved
+  search: (query: SearchQuery, token?: string, projectId?: string) =>
+    request<SearchResult>(
+      `/search/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
+      { method: "POST", body: JSON.stringify(query) },
+      token,
+    ),
+
+  // Topic modelling (returns job_id, polled via getJobStatus)
+  generateTopics: (projectId: string, docIds: string[], token?: string) =>
+    request<{ job_id: string }>(
+      "/topics/generate",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, doc_ids: docIds }) },
+      token,
+    ),
+  reconcileTopics: (
+    projectId: string,
+    topics: Topic[],
+    token?: string,
+    passthroughTopics: Topic[] = [],
+  ) =>
+    request<{ job_id: string }>(
+      "/topics/reconcile",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          project_id: projectId,
+          topics,
+          passthrough_topics: passthroughTopics,
+        }),
+      },
+      token,
+    ),
 
   // Classification
-  trainClassifier: (projectId: string, name: string, topics: Topic[]) =>
-    request<{ job_id: string }>("/classification/train", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, name, topics }),
-    }),
-  applyPipelineLabels: (projectId: string, classifierId: string) =>
-    request<LabellingResult>("/classification/label/phase1", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, classifier_id: classifierId }),
-    }),
-  labelByQuery: (projectId: string, classifierId: string, query: SearchQuery) =>
-    request<{ job_id: string }>("/classification/label/phase2", {
-      method: "POST",
-      body: JSON.stringify({ project_id: projectId, classifier_id: classifierId, query }),
-    }),
+  trainClassifier: (projectId: string, name: string, topics: Topic[], token?: string) =>
+    request<{ job_id: string }>(
+      "/classification/train",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, name, topics }) },
+      token,
+    ),
+  // Phase 1 — synchronous: labels the retrieved docs from the pipeline's topic_mapping.
+  applyPipelineLabels: (projectId: string, classifierId: string, token?: string) =>
+    request<LabellingResult>(
+      "/classification/label/initial",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, classifier_id: classifierId }) },
+      token,
+    ),
+  // Phase 2 — async (returns job_id): classifier inference over a new query.
+  labelByQuery: (projectId: string, classifierId: string, query: SearchQuery, token?: string) =>
+    request<{ job_id: string }>(
+      "/classification/label",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, classifier_id: classifierId, query }) },
+      token,
+    ),
 
-  // Visualisation
-  loadDashboard: (query: VisualisationQuery) =>
-    request<Dashboard>("/visualisation/dashboard", {
-      method: "POST",
-      body: JSON.stringify(query),
-    }),
-
-  // Jobs
-  getJobStatus: (jobId: string) => request<JobStatus>(`/jobs/${jobId}`),
-  streamJob: (jobId: string) => new EventSource(`${BASE_URL}/jobs/${jobId}/stream`),
+  // Visualisation — project_id scopes subtopic resolution to the project's proxies.
+  loadDashboard: (query: VisualisationQuery, projectId?: string, token?: string) =>
+    request<Dashboard>(
+      `/visualisation/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
+      { method: "POST", body: JSON.stringify(query) },
+      token,
+    ),
 };

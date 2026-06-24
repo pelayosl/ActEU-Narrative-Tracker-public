@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 
 type SearchParams = Promise<{ expired?: string }>;
@@ -9,7 +10,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm rounded-lg border border-border bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-2xl font-semibold text-ink">ActEU Narrative Tracker</h1>
+        <h1 className="mb-6 text-2xl font-semibold text-ink">
+          <Link href="/" className="inline-block transition-colors hover:text-acteu-red">
+            <span className="text-acteu-red">ActEU</span> Narrative Tracker
+          </Link>
+        </h1>
         {sessionExpired && (
           <div className="mb-4 rounded-md border border-acteu-red bg-acteu-red/5 px-3 py-2 text-sm text-acteu-red">
             Your session has expired. Please log in again.

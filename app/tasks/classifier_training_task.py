@@ -6,7 +6,7 @@ from app.config import settings
 from app.infrastructure.classifier_wrapper import ClassifierWrapper
 from app.tasks.task_context import project_service_context, search_service_context
 from app.schemas.classification import ClassifierMetadata
-from app.schemas.topic import Topic
+from app.schemas.topic import OTHER_TOPIC_ID, Topic
 from app.tasks.celery_app import celery_app
 
 
@@ -14,8 +14,7 @@ from app.tasks.celery_app import celery_app
 def classifier_training_task(
     topics: list[dict], project_id: str, name: str
 ) -> dict:
-    """Train a FastText classifier on the validated topics.
-    Depends on: ClassifierWrapper, SearchService (fetch texts), ProjectService (save classifier)."""
+    """Train a FastText classifier on the validated topics."""
     return asyncio.run(_run(topics, project_id, name))
 
 
@@ -27,7 +26,7 @@ async def _run(topics: list[dict], project_id: str, name: str) -> dict:
         pipeline = await project_service.get_pending_pipeline(project_id)
 
     if pipeline is None:
-        raise ValueError("No pending pipeline found — topic generation must run first")
+        raise ValueError("No pending pipeline found. Topic generation must run first")
 
     topic_mapping = pipeline.topic_mapping
 
@@ -43,6 +42,11 @@ async def _run(topics: list[dict], project_id: str, name: str) -> dict:
 
         for doc_id in doc_ids:
             training_pairs.append((doc_id, topic.topic_id))
+
+    # Add the outlier docs as the reserved "Other" class so the classifier learns
+    # to recognise documents that match no real topic instead of forcing a label.
+    for doc_id in topic_mapping.get(OTHER_TOPIC_ID, []):
+        training_pairs.append((doc_id, OTHER_TOPIC_ID))
 
     if not training_pairs:
         raise ValueError("No training data found — topic mapping is empty or doc_ids are missing")
@@ -86,5 +90,6 @@ async def _run(topics: list[dict], project_id: str, name: str) -> dict:
 
     async with project_service_context() as project_service:
         await project_service.save_classifier(project_id, metadata)
+        await project_service.stamp_pipeline_classifier(project_id, classifier_id)
 
     return metadata.model_dump()

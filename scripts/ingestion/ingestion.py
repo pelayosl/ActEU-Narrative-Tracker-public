@@ -5,6 +5,16 @@ Data ingestion main module — ActEU Narrative Tracker
 import re
 import uuid
 
+# Fixed namespace so a subtopic label always hashes to the same topic_id, on every
+# document and every future ingestion batch (uuid5 = content hash of namespace+label).
+ACTEU_SUBTOPIC_NS = uuid.UUID("6f1a7b2c-3d4e-5a6b-8c9d-0e1f2a3b4c5d")
+
+
+def subtopic_id(label: str) -> str:
+    """Deterministic, stable topic_id for a db (ACTEU-native) subtopic label."""
+    return str(uuid.uuid5(ACTEU_SUBTOPIC_NS, label.strip()))
+
+
 PRESUMED_ISSUE_MAP = {
     "Migration": "immigration",
     "Climate": "climate_change",
@@ -112,7 +122,7 @@ def extract_acteu_subtopic(annotations: dict) -> list[dict]:
         return []
     
     return [{
-        "topic_id": str(uuid.uuid4()),
+        "topic_id": subtopic_id(label),
         "label": label,
         "confidence": confidence
     } for label, confidence in entries]

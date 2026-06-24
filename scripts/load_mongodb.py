@@ -1,6 +1,6 @@
 """
 MongoDB loader script — ActEU Narrative Tracker
-Reads transformed ndjson files organised by platform/country and bulk-inserts
+Reads transformed ndjson files organised by platform and language and bulk-inserts
 them into MongoDB. Also seeds the topics collection with the three core topics,
 an admin user, and a starter project.
 
@@ -92,7 +92,7 @@ CORE_TOPICS = [
     },
 ]
 
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_NAME = os.getenv("ADMIN_NAME", "Admin")
 ADMIN_SURNAME = os.getenv("ADMIN_SURNAME", "User")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
@@ -170,7 +170,7 @@ def load_platform_dir(platform_dir: Path, collection) -> tuple[int, int]:
 def create_indexes(db) -> None:
     print("\nCreating indexes...")
     db.documents.create_index("platform")
-    db.documents.create_index("country")
+    db.documents.create_index("language")
     db.documents.create_index("published_time")
     db.documents.create_index("acteu_topic.label")
     db.topics.create_index("topic_id", unique=True)
@@ -184,6 +184,34 @@ def seed_core_topics(db) -> None:
     print("\nSeeding core topics...")
     db.topics.insert_many(CORE_TOPICS)
     print(f"  → Inserted {len(CORE_TOPICS)} core topics.")
+
+
+def seed_subtopics_catalog(db) -> None:
+    """Upsert every db subtopic found in the loaded documents into the
+    topics catalog with core_topic=None. topic_ids are deterministic (uuid5 of the
+    label, assigned at ingestion), so this is idempotent across loads and batches."""
+    print("\nSeeding db subtopics catalog...")
+    pipeline = [
+        {"$unwind": "$subtopics"},
+        {"$group": {"_id": "$subtopics.topic_id", "label": {"$first": "$subtopics.label"}}},
+    ]
+    count = 0
+    for row in db.documents.aggregate(pipeline):
+        if not row.get("_id") or not row.get("label"):
+            continue
+        db.topics.update_one(
+            {"topic_id": row["_id"]},
+            {"$setOnInsert": {
+                "topic_id": row["_id"],
+                "name": row["label"],
+                "description": "",
+                "core_topic": None,
+                "created_at": datetime.now(timezone.utc),
+            }},
+            upsert=True,
+        )
+        count += 1
+    print(f"  → Upserted {count} db subtopics into the catalog.")
 
 
 def seed_admin_and_project(db) -> None:
@@ -243,6 +271,7 @@ def main() -> None:
         grand_total_skipped += skipped
 
     seed_core_topics(db)
+    seed_subtopics_catalog(db)
     seed_admin_and_project(db)
     create_indexes(db)
 

@@ -10,6 +10,7 @@ from app.api.dependencies import (
 from app.exceptions import (
     ClassifierNotFound,
     NoPendingPipeline,
+    PendingPipelineMismatch,
     ProjectAccessDenied,
     ProjectNotFound,
 )
@@ -29,6 +30,10 @@ P_NOT_FOUND = "Project not found"
 ACCESS_DENIED = "Access denied"
 CLASSIFIER_NOT_FOUND = "Classifier not found"
 NO_PENDING_PIPELINE = "No pending pipeline — initial labelling unavailable"
+PENDING_PIPELINE_MISMATCH = (
+    "Pending pipeline no longer belongs to this classifier — initial labelling "
+    "unavailable. Use a custom query (Phase 2) instead."
+)
 
 
 @router.post("/train")
@@ -68,6 +73,10 @@ async def apply_initial_labels(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=CLASSIFIER_NOT_FOUND)
     except NoPendingPipeline:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=NO_PENDING_PIPELINE)
+    except PendingPipelineMismatch:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=PENDING_PIPELINE_MISMATCH
+        )
 
 
 @router.post("/label")

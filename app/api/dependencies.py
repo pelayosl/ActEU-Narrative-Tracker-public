@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 from redis.asyncio import Redis
 
 from app.exceptions import InvalidToken, TokenExpired, UserNotFound
@@ -27,23 +27,23 @@ from app.config import settings
 security = HTTPBearer()
 
 
-def get_db() -> AsyncIOMotorDatabase:
+def get_db() -> AsyncDatabase:
     return db
 
 
-def get_user_repo(db_instance: Annotated[AsyncIOMotorDatabase, Depends(get_db)]) -> UserRepository:
+def get_user_repo(db_instance: Annotated[AsyncDatabase, Depends(get_db)]) -> UserRepository:
     return UserRepository(db_instance)
 
 
-def get_document_repo(db_instance: Annotated[AsyncIOMotorDatabase, Depends(get_db)]) -> DocumentRepository:
+def get_document_repo(db_instance: Annotated[AsyncDatabase, Depends(get_db)]) -> DocumentRepository:
     return DocumentRepository(db_instance)
 
 
-def get_project_repo(db_instance: Annotated[AsyncIOMotorDatabase, Depends(get_db)]) -> ProjectRepository:
+def get_project_repo(db_instance: Annotated[AsyncDatabase, Depends(get_db)]) -> ProjectRepository:
     return ProjectRepository(db_instance)
 
 
-def get_topic_repo(db_instance: Annotated[AsyncIOMotorDatabase, Depends(get_db)]) -> TopicRepository:
+def get_topic_repo(db_instance: Annotated[AsyncDatabase, Depends(get_db)]) -> TopicRepository:
     return TopicRepository(db_instance)
 
 

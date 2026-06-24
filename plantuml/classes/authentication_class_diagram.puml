@@ -1,0 +1,155 @@
+@startuml authentication_subsystem
+' =====================================================================
+'  Authentication Subsystem
+'  Covers: login, token-based session management, password hashing,
+'          role enforcement, and user registration (admin-only).
+' =====================================================================
+
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+skinparam class {
+    BackgroundColor<<external>> #F0F0F0
+    BorderColor<<external>>     #AAAAAA
+    FontColor<<external>>       #666666
+}
+
+' =====================================================================
+'  EXTERNAL DEPENDENCIES (referenced, not owned by this subsystem)
+' =====================================================================
+package "External" {
+    class MongoDB <<external>> {
+        +db : AsyncIOMotorDatabase
+    }
+    class Settings <<external>> {
+        +JWT_SECRET : str
+        +JWT_ALGORITHM : str
+        +JWT_EXPIRATION_MINUTES : int
+    }
+}
+
+' =====================================================================
+'  INFRASTRUCTURE (adapters owned by this subsystem)
+' =====================================================================
+package "app.infrastructure" {
+    class PasswordHasher {
+        +hash(password : str) : str
+        +verify(password : str, hashed : str) : bool
+    }
+
+    class JWTHandler {
+        +encode(payload : dict) : str
+        +decode(token : str) : dict
+    }
+}
+
+' =====================================================================
+'  REPOSITORY
+' =====================================================================
+package "app.repositories" {
+    class UserRepository {
+        -_collection : Collection
+        +find_by_username(username : str) : User
+        +save(user : User) : None
+    }
+}
+
+' =====================================================================
+'  SERVICE
+' =====================================================================
+package "app.services" {
+    class AuthService {
+        -_user_repo : UserRepository
+        -_hasher : PasswordHasher
+        -_jwt : JWTHandler
+        +login(username : str, password : str) : AuthToken
+        +verify_token(token : str) : User
+        +register_user(form : RegistrationForm) : User
+    }
+}
+
+' =====================================================================
+'  API
+' =====================================================================
+package "app.api" {
+    class APIRouterAuth {
+        +login(form : LoginForm, service : AuthService) : AuthToken
+        +register(form : RegistrationForm, service : AuthService, _admin : User) : UserPublic
+    }
+
+    class Dependencies <<module>> {
+        +get_auth_service(...) : AuthService
+        +get_current_user(credentials, auth_service) : User
+        +get_current_admin(current_user) : User
+    }
+}
+
+' =====================================================================
+'  SCHEMAS
+' =====================================================================
+package "app.schemas.auth" {
+    class User {
+        +user_id : str
+        +name : str
+        +surname : str
+        +username : str
+        +hashed_password : str
+        +role : str
+    }
+
+    class UserPublic {
+        +user_id : str
+        +name : str
+        +surname : str
+        +username : str
+        +role : str
+    }
+
+    class AuthToken {
+        +access_token : str
+        +token_type : str
+    }
+
+    class LoginForm {
+        +username : str
+        +password : str
+    }
+
+    class RegistrationForm {
+        +name : str
+        +surname : str
+        +username : str
+        +password : str
+        +role : str
+    }
+}
+
+' =====================================================================
+'  RELATIONSHIPS
+' =====================================================================
+
+' --- structural (solid) ---
+AuthService --> UserRepository
+AuthService --> PasswordHasher
+AuthService --> JWTHandler
+
+' --- dependencies (dashed) ---
+JWTHandler ..> Settings
+
+UserRepository ..> MongoDB
+UserRepository ..> User
+
+AuthService ..> AuthToken
+AuthService ..> User
+AuthService ..> RegistrationForm
+
+Dependencies ..> AuthService
+APIRouterAuth ..> AuthService
+APIRouterAuth ..> LoginForm
+APIRouterAuth ..> RegistrationForm
+APIRouterAuth ..> AuthToken
+APIRouterAuth ..> UserPublic
+
+@enduml

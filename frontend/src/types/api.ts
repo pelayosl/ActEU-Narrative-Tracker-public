@@ -14,12 +14,13 @@ export interface Topic {
 
 export interface SearchQuery {
   keywords: string[];
-  date_from: string;
-  date_to: string;
-  languages: string[]; // backend uses languages; UI labels them as countries
+  date_from?: string; // omitted = no lower bound (full collection)
+  date_to?: string; // omitted = no upper bound
+  languages: string[]; // backend uses languages
   platforms: Platform[];
   topics: string[];
   subtopics: string[];
+  confidence_threshold?: number | null;
 }
 
 export interface DocumentSummary {
@@ -27,14 +28,24 @@ export interface DocumentSummary {
   headline: string;
   excerpt: string;
   platform: Platform;
-  country: string;
-  date: string;
+  language: string; // backend returns language
+  date: string | null; // some documents have no published_time
   relevant_topics: string[];
 }
 
 export interface SearchResult {
   total_docs: number;
   retrieved_docs: DocumentSummary[];
+}
+
+export interface TopicChoice {
+  value: string; // core_topic label (core topics) or topic_id (subtopics)
+  label: string;
+}
+
+export interface SearchTopics {
+  core_topics: TopicChoice[];
+  subtopics: TopicChoice[]; // db subtopics ∪ project classifier subtopics
 }
 
 export interface ClassifierMetadata {
@@ -64,6 +75,7 @@ export interface PendingPipeline {
   reconciled_topics: Topic[];
   topic_mapping: Record<string, string[]>;
   created_at: string;
+  classifier_id: string | null; // stamped once a classifier has been trained
 }
 
 export interface Project {
@@ -83,25 +95,68 @@ export interface LabellingResult {
 }
 
 export interface VisualisationQuery {
-  topics: string[];
+  topics: string[]; // core label (e.g. "gender_issues") or project subtopic topic_id (UUID)
   date_from: string;
   date_to: string;
-  countries: string[];
+  languages: string[];
   platforms: Platform[];
+  sample_size: number; // total relevant-documents sample, apportioned across topics
 }
 
-export interface Actor {
-  name: string;
-  sentiment: Sentiment;
-  document_count: number;
+// Each series/breakdown's `topic` field is the identifier submitted in the query
+// (core label or subtopic UUID); the UI maps it back to a display name.
+export interface TimePoint {
+  date: string; // "YYYY-MM-DD"
+  count: number;
+}
+export interface TopicTimeSeries {
+  topic: string;
+  series: TimePoint[];
+}
+
+export interface LanguageCount {
+  language: string;
+  count: number;
+}
+export interface TopicLanguageBreakdown {
+  topic: string;
+  counts: LanguageCount[];
+}
+
+export interface PlatformCount {
+  platform: string;
+  count: number;
+}
+export interface TopicPlatformBreakdown {
+  topic: string;
+  counts: PlatformCount[];
+}
+
+export interface EntityScore {
+  entity: string;
+  score: number;
+}
+export interface TopicEntities {
+  topic: string;
+  entities: EntityScore[];
+}
+
+export interface DocumentPreview {
+  doc_id: string;
+  platform: string;
+  language: string;
+  date: string;
+  topic: string;
+  relevance_score: number;
+  excerpt: string;
 }
 
 export interface Dashboard {
-  topic_evolution: Array<Record<string, number | string>>;
-  topics_by_country: Array<Record<string, number | string>>;
-  topics_by_platform: Array<Record<string, number | string>>;
-  top_actors: Actor[];
-  relevant_documents: DocumentSummary[];
+  topic_evolution: TopicTimeSeries[];
+  topics_by_language: TopicLanguageBreakdown[];
+  topics_by_platform: TopicPlatformBreakdown[];
+  top_entities: TopicEntities[];
+  relevant_documents: DocumentPreview[];
 }
 
 export interface JobStatus {

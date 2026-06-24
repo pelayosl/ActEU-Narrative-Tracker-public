@@ -17,8 +17,8 @@ from ingestion import (
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\telegram\\telegram-fi.ndjson")
-OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\telegram\\telegram-fi-db.ndjson")
+INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\telegram\\telegram-es.ndjson")
+OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\telegram\\telegram-es-db.ndjson")
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -41,7 +41,7 @@ def transform_telegram(raw: dict) -> dict | None:
         "platform": "telegram",
         "country": country,
         "language": language,
-        "published_time": raw.get("published_time"),
+        "published_time": raw.get("published_time") or raw.get("modified_time"),
         "author": author,
         "acteu_topic": extract_acteu_topic(annotations),
         "subtopics": extract_acteu_subtopic(annotations),

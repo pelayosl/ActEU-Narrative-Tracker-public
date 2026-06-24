@@ -14,9 +14,11 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_MINUTES: int = 60
     DOCUMENT_SEARCH_LIMIT: int = 5000
     CLASSIFIER_DIR: str = "/app/classifiers"
+    EMBEDDING_CACHE_DIR: str = "/app/embedding_cache"
     OLLAMA_URL: str = "university-api" # Stored in .env
-    OLLAMA_MODEL: str = "gemma3:27b"
+    OLLAMA_MODEL: str = "gemma4:26b"
     HF_TOKEN: str = "changeme"
+    LLM_API_KEY: str = "changeme"
 
     class Config:
         env_file = ".env"

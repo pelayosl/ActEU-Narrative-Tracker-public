@@ -9,6 +9,7 @@ from app.tasks.task_context import (
 )
 from app.schemas.classification import DocumentProxy, LabellingResult, ProxyLabel
 from app.schemas.search import SearchQuery
+from app.schemas.topic import OTHER_TOPIC_ID
 from app.tasks.celery_app import celery_app
 
 
@@ -47,7 +48,8 @@ async def _label(
         classifier = await project_service.get_classifier(project_id, classifier_id)
         already_labelled = await project_service.get_labelled_doc_ids(project_id, classifier_id)
 
-    # Load FastText model
+    # Instantiated directly (not via task_context): owns no networked connection,
+    # just loads a local FastText model file.
     wrapper = ClassifierWrapper()
     wrapper.load(classifier.file_path)
 
@@ -78,6 +80,9 @@ async def _label(
             continue
 
         topic_id, confidence = wrapper.predict(text)
+        if topic_id == OTHER_TOPIC_ID:
+            # Document stays unlabelled
+            continue
         topic = topic_lookup.get(topic_id)
         if topic is None:
             # Predicted label that doesn't match any classifier topic — skip defensively

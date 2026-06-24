@@ -39,7 +39,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
   return (
-    <SessionProvider>
+    // Re-check the session periodically (and on window focus) so an expired session
+    // is detected even while the user is idle, triggering the AuthGuard redirect.
+    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     </SessionProvider>
   );

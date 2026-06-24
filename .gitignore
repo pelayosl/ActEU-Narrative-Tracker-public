@@ -22,3 +22,8 @@ Thumbs.db
 # Other
 .env
 z_context/
+.claude
+
+# Coverage
+.coverage
+htmlcov/

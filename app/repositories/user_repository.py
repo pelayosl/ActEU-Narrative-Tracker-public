@@ -1,10 +1,10 @@
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from app.schemas.auth import User
 
 
 class UserRepository:
-    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+    def __init__(self, db: AsyncDatabase) -> None:
         self._collection = db["users"]
 
     async def find_by_username(self, username: str) -> User | None:

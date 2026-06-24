@@ -12,7 +12,10 @@ class LLMClient:
     """Ollama wrapper for topic reconciliation. Lives in services (not infrastructure)
     because it encapsulates prompt engineering, response parsing, and fallback logic."""
 
-    def reconcile(self, topics: list[Topic]) -> list[Topic]:
+    def reconcile(self, topics: list[Topic]) -> tuple[list[Topic], bool]:
+        """Returns (reconciled_topics, llm_available). When the LLM is unavailable the
+        flag is False and the second element is the unchanged fallback list — the
+        caller decides whether to use or discard it."""
         valid_ids = {t.topic_id for t in topics}
         topics_payload = [
             {"id": t.topic_id, "name": t.name, "description": t.description}
@@ -35,14 +38,29 @@ class LLMClient:
         try:
             response = httpx.post(
                 settings.OLLAMA_URL,
-                json={"model": settings.OLLAMA_MODEL, "prompt": prompt, "stream": False},
-                timeout=120.0,
+                headers={
+                    "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": settings.OLLAMA_MODEL,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                },
+                timeout=120,
             )
-            raw = response.json()["response"]
+            data = response.json()
+            choices = data.get("choices") or []
+            if not choices or not isinstance(choices, list):
+                raise ValueError(f"Unexpected LLM response payload: {data}")
+            raw = choices[0].get("message", {}).get("content")
+            if raw is None:
+                raise ValueError(f"Missing assistant content in LLM response: {data}")
             parsed = _extract_json(raw)
-            return _build_topics(parsed, valid_ids, topics)
+            return _build_topics(parsed, valid_ids, topics), True
         except Exception:
-            return _fallback(topics)
+            return _fallback(topics), False
 
 
 def _extract_json(text: str) -> list[dict]:
@@ -54,21 +72,40 @@ def _extract_json(text: str) -> list[dict]:
     return json.loads(text)
 
 
+def _generation_ids(topic: Topic) -> list[str]:
+    """Generation-era UUIDs a topic resolves to in topic_mapping.
+
+    A manually merged topic carries its constituents' generation ids in
+    origin_topic_ids; a raw generated topic uses its own id. Reconciliation must
+    propagate these so merged topics keep mapping to their documents at train time.
+    """
+    return topic.origin_topic_ids if topic.origin_topic_ids else [topic.topic_id]
+
+
 def _build_topics(
     parsed: list[dict],
     valid_ids: set[str],
     originals: list[Topic],
 ) -> list[Topic]:
-    """Validate LLM output and ensure no input topic is lost."""
-    covered_ids: set[str] = set()
+    """Validate LLM output and ensure no input topic is lost.
+
+    The LLM groups by the surface topic_ids it was given, but origin_topic_ids on
+    the output must always be generation-era ids (the topic_mapping keys). We
+    therefore flatten each surface id back to its generation ids transitively.
+    """
+    by_id = {t.topic_id: t for t in originals}
+    covered_surface_ids: set[str] = set()
     result: list[Topic] = []
 
     for item in parsed:
-        # Filter out any IDs the LLM hallucinated
-        origin_ids = [oid for oid in item.get("origin_topic_ids", []) if oid in valid_ids]
-        if not origin_ids:
+        # Filter out any surface IDs the LLM hallucinated
+        surface_ids = [oid for oid in item.get("origin_topic_ids", []) if oid in valid_ids]
+        if not surface_ids:
             continue
-        covered_ids.update(origin_ids)
+        covered_surface_ids.update(surface_ids)
+        origin_ids: list[str] = []
+        for sid in surface_ids:
+            origin_ids.extend(_generation_ids(by_id[sid]))
         result.append(Topic(
             topic_id=str(uuid.uuid4()),
             name=item.get("name", "Unknown"),
@@ -78,12 +115,12 @@ def _build_topics(
 
     # Any topic the LLM dropped gets preserved as-is
     for topic in originals:
-        if topic.topic_id not in covered_ids:
+        if topic.topic_id not in covered_surface_ids:
             result.append(Topic(
                 topic_id=str(uuid.uuid4()),
                 name=topic.name,
                 description=topic.description,
-                origin_topic_ids=[topic.topic_id],
+                origin_topic_ids=_generation_ids(topic),
             ))
 
     return result
@@ -93,10 +130,10 @@ def _fallback(topics: list[Topic]) -> list[Topic]:
     """Return original topics unchanged if the LLM call fails entirely."""
     return [
         Topic(
-            topic_id=str(uuid.uuid4()),
+            topic_id=t.topic_id,
             name=t.name,
             description=t.description,
-            origin_topic_ids=[t.topic_id],
+            origin_topic_ids=_generation_ids(t),
         )
         for t in topics
     ]

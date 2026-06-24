@@ -1,0 +1,221 @@
+@startuml api_gateway_subsystem
+' =====================================================================
+'  API Gateway Subsystem
+'  Covers: HTTP routing, request validation, SSE streaming endpoints,
+'  authentication middleware, dependency injection factory, and
+'  multi-service orchestration (e.g. proxy resolution before search).
+'  The gateway never imports repository classes directly.
+' =====================================================================
+
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+skinparam class {
+    BackgroundColor<<external>> #F0F0F0
+    BorderColor<<external>>     #AAAAAA
+    FontColor<<external>>       #666666
+}
+
+' =====================================================================
+'  EXTERNAL DEPENDENCIES (services delegated to)
+' =====================================================================
+package "External — Services" {
+    class AuthService <<external>>
+    class SearchService <<external>>
+    class ProjectService <<external>>
+    class TopicModellingService <<external>>
+    class ClassificationService <<external>>
+    class VisualisationService <<external>>
+    class JobQueueService <<external>>
+}
+
+package "External — Repositories" {
+    class UserRepository <<external>>
+    class DocumentRepository <<external>>
+    class ProjectRepository <<external>>
+    class TopicRepository <<external>>
+}
+
+package "External — Infrastructure" {
+    class MongoDB <<external>>
+}
+
+' =====================================================================
+'  API LAYER
+' =====================================================================
+package "app.api" {
+    class FastAPI <<framework>>
+
+    class APIRouter <<framework>>
+
+    class Dependencies <<module>> {
+        +get_db() : AsyncDatabase
+        +get_user_repo(db) : UserRepository
+        +get_document_repo(db) : DocumentRepository
+        +get_project_repo(db) : ProjectRepository
+        +get_topic_repo(db) : TopicRepository
+        +get_auth_service(...) : AuthService
+        +get_search_service(...) : SearchService
+        +get_project_service(...) : ProjectService
+        +get_visualisation_service(...) : VisualisationService
+        +get_redis() : Redis
+        +get_job_queue(redis) : JobQueueService
+        +get_classification_service(...) : ClassificationService
+        +get_topic_modelling_service(...) : TopicModellingService
+        +get_current_user(...) : User
+        +get_current_admin(...) : User
+    }
+
+    class APIRouterAuth {
+        +login(form : LoginForm, service : AuthService) : AuthToken
+        +register(form : RegistrationForm, service : AuthService, _admin : User) : UserPublic
+    }
+
+    class APIRouterProjects {
+        +create_project(name, service, user) : Project
+        +list_projects(service, user) : list<Project>
+        +get_project(project_id, service, user) : Project
+        +delete_project(project_id, service, user) : None
+        +get_available_topics(project_id, service, user) : SearchTopics
+        +download_classifier(project_id, classifier_id, service, user) : FileResponse
+        +delete_classifier(project_id, classifier_id, service, user) : None
+    }
+
+    class APIRouterSearch {
+        +search(query, service, project_service, user, project_id) : SearchResult
+        +get_documents_by_ids(doc_ids, service, _user) : list<dict>
+        +get_languages(service, _user) : list<str>
+    }
+
+    class APIRouters {
+        +generate_topics(body, service, project_service, user) : dict
+        +reconcile_topics(body, service, project_service, user) : dict
+    }
+
+    class APIRouterClassification {
+        +train_classifier(body, service, project_service, user) : dict
+        +apply_initial_labels(body, project_service, user) : LabellingResult
+        +label_documents(body, service, project_service, user) : dict
+    }
+
+    class APIRouterVisualisation {
+        +load_dashboard(query, service, project_service, user, project_id) : Dashboard
+    }
+
+    class APIRouterJobs {
+        +stream_job(job_id, job_queue, _user) : EventSourceResponse
+    }
+
+    ' inheritance
+    APIRouter <|-- APIRouterAuth
+    APIRouter <|-- APIRouterProjects
+    APIRouter <|-- APIRouterSearch
+    APIRouter <|-- APIRouterTopics
+    APIRouter <|-- APIRouterClassification
+    APIRouter <|-- APIRouterVisualisation
+    APIRouter <|-- APIRouterJobs
+}
+
+' =====================================================================
+'  SCHEMAS (request / response types used at the boundary)
+' =====================================================================
+package "app.schemas (API boundary)" {
+    ' auth
+    class LoginForm <<schema>>
+    class RegistrationForm <<schema>>
+    class AuthToken <<schema>>
+    class UserPublic <<schema>>
+    class User <<schema>>
+
+    ' search
+    class SearchQuery <<schema>>
+    class SearchResult <<schema>>
+    class SearchTopics <<schema>>
+
+    ' topic
+    class GenerateTopicsRequest <<schema>>
+    class ReconciliationRequest <<schema>>
+    class GenerateTopicsResponse <<schema>>
+    class ReconciliationResponse <<schema>>
+
+    ' classification
+    class TrainClassifierRequest <<schema>>
+    class LabelRequest <<schema>>
+    class InitialLabelRequest <<schema>>
+    class LabellingResult <<schema>>
+
+    ' project
+    class Project <<schema>>
+
+    ' visualisation
+    class VisualisationQuery <<schema>>
+    class Dashboard <<schema>>
+
+    ' jobs
+    class JobStatus <<schema>>
+}
+
+' =====================================================================
+'  RELATIONSHIPS
+' =====================================================================
+
+' --- FastAPI aggregates routers ---
+FastAPI o-- APIRouterAuth
+FastAPI o-- APIRouterProjects
+FastAPI o-- APIRouterSearch
+FastAPI o-- APIRouterTopics
+FastAPI o-- APIRouterClassification
+FastAPI o-- APIRouterVisualisation
+FastAPI o-- APIRouterJobs
+
+' --- Dependencies: factory -> repos + services + MongoDB ---
+Dependencies ..> MongoDB
+Dependencies ..> UserRepository
+Dependencies ..> DocumentRepository
+Dependencies ..> ProjectRepository
+Dependencies ..> TopicRepository
+Dependencies ..> AuthService
+Dependencies ..> SearchService
+Dependencies ..> ProjectService
+Dependencies ..> VisualisationService
+Dependencies ..> ClassificationService
+Dependencies ..> TopicModellingService
+Dependencies ..> JobQueueService
+
+' --- routers -> services ---
+APIRouterAuth ..> AuthService
+APIRouterProjects ..> ProjectService
+APIRouterSearch ..> SearchService
+APIRouterSearch ..> ProjectService
+APIRouterTopics ..> TopicModellingService
+APIRouterTopics ..> ProjectService
+APIRouterClassification ..> ClassificationService
+APIRouterClassification ..> ProjectService
+APIRouterVisualisation ..> VisualisationService
+APIRouterVisualisation ..> ProjectService
+APIRouterJobs ..> JobQueueService
+
+' --- routers -> schemas ---
+APIRouterAuth ..> LoginForm
+APIRouterAuth ..> RegistrationForm
+APIRouterAuth ..> AuthToken
+APIRouterAuth ..> UserPublic
+APIRouterSearch ..> SearchQuery
+APIRouterSearch ..> SearchResult
+APIRouterTopics ..> GenerateTopicsRequest
+APIRouterTopics ..> ReconciliationRequest
+APIRouterTopics ..> GenerateTopicsResponse
+APIRouterTopics ..> ReconciliationResponse
+APIRouterClassification ..> TrainClassifierRequest
+APIRouterClassification ..> LabelRequest
+APIRouterClassification ..> InitialLabelRequest
+APIRouterClassification ..> LabellingResult
+APIRouterVisualisation ..> VisualisationQuery
+APIRouterVisualisation ..> Dashboard
+APIRouterProjects ..> Project
+APIRouterProjects ..> SearchTopics
+APIRouterJobs ..> JobStatus
+
+@enduml

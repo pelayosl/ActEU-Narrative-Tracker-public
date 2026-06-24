@@ -56,10 +56,9 @@ async def search(
     return result
 
 
-@router.post("/by-ids")
-async def get_documents_by_ids(
-    doc_ids: list[str],
+@router.get("/languages")
+async def get_languages(
     service: Annotated[SearchService, Depends(get_search_service)],
     _: Annotated[User, Depends(get_current_user)],
-) -> list[dict]:
-    return await service.get_documents_by_ids(doc_ids)
+) -> list[str]:
+    return await service.get_available_languages()

@@ -51,5 +51,9 @@ async def reconcile_topics(
     except ProjectAccessDenied:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ACCESS_DENIED)
 
-    job_id = service.submit_reconciliation(body.project_id, [t.model_dump() for t in body.topics])
+    job_id = service.submit_reconciliation(
+        body.project_id,
+        [t.model_dump() for t in body.topics],
+        [t.model_dump() for t in body.passthrough_topics],
+    )
     return {"job_id": job_id}

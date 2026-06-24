@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { DB_UNAVAILABLE_ERROR } from "@/lib/api-client";
 import type { UserRole } from "@/types/api";
 
 // Server-side only — talks to FastAPI directly (no CORS / no proxy).
@@ -42,6 +43,10 @@ export const authOptions: NextAuthOptions = {
             password: credentials.password,
           }),
         });
+        // A thrown error is surfaced to the form as `res.error`; null collapses to
+        // the generic "invalid credentials". Distinguish a down database (503) so
+        // the user isn't told their credentials are wrong when the DB is simply down.
+        if (res.status === 503) throw new Error(DB_UNAVAILABLE_ERROR);
         if (!res.ok) return null; // 401 → invalid credentials
 
         const { access_token } = (await res.json()) as { access_token: string };

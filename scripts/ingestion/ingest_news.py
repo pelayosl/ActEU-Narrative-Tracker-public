@@ -20,8 +20,8 @@ from ingestion import (
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-INPUT_DIR = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\news\\fi")
-OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\news\\news-fi-db.ndjson")
+INPUT_DIR = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\news\\es")
+OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\news\\news-es-db.ndjson")
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -52,7 +52,7 @@ def transform_news(raw: dict) -> dict | None:
         "platform": "media",
         "country": country,
         "language": language,
-        "published_time": raw.get("published_time"),
+        "published_time": raw.get("published_time") or raw.get("modified_time"),
         "author": author,
         "acteu_topic": extract_acteu_topic(annotations),
         "subtopics": extract_acteu_subtopic(annotations),

@@ -306,38 +306,3 @@ class TestCount:
 
     async def test_count_empty_collection(self, repo):
         assert await repo.count(SearchQuery()) == 0
-
-
-# ---------------------------------------------------------------------------
-# get_excerpt()
-# ---------------------------------------------------------------------------
-
-class TestGetExcerpt:
-    async def test_short_text_returned_verbatim(self, db, repo):
-        text = "Short text."
-        result = await db["documents"].insert_one(make_doc(plain_text=text))
-        excerpt = await repo.get_excerpt(str(result.inserted_id))
-        assert excerpt == text
-
-    async def test_long_text_is_truncated(self, db, repo):
-        text = "A" * 300
-        result = await db["documents"].insert_one(make_doc(plain_text=text))
-        excerpt = await repo.get_excerpt(str(result.inserted_id))
-        assert len(excerpt) <= 253  # 250 chars + "..."
-        assert excerpt.endswith("...")
-
-    async def test_exactly_250_chars_not_truncated(self, db, repo):
-        text = "B" * 250
-        result = await db["documents"].insert_one(make_doc(plain_text=text))
-        excerpt = await repo.get_excerpt(str(result.inserted_id))
-        assert excerpt == text
-        assert not excerpt.endswith("...")
-
-    async def test_invalid_id_returns_empty_string(self, repo):
-        excerpt = await repo.get_excerpt("not-a-valid-id")
-        assert excerpt == ""
-
-    async def test_unknown_id_returns_empty_string(self, repo):
-        from bson import ObjectId
-        excerpt = await repo.get_excerpt(str(ObjectId()))
-        assert excerpt == ""

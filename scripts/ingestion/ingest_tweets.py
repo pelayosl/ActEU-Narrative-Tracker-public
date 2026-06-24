@@ -17,8 +17,8 @@ from ingestion import (
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\tweets\\tweets-fi.ndjson")
-OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\tweets\\tweets-fi-db.ndjson")
+INPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\filtered-docs\\tweets\\tweets-es.ndjson")
+OUTPUT_PATH = Path("C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db\\tweets\\tweets-es-db.ndjson")
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -47,7 +47,7 @@ def transform_tweet(raw: dict) -> dict | None:
         "platform": "twitter",
         "country": country,
         "language": language,
-        "published_time": raw.get("published_time"),
+        "published_time": raw.get("published_time") or raw.get("modified_time"),
         "author": author_username or author_display,
         "acteu_topic": extract_acteu_topic(annotations),
         "subtopics": extract_acteu_subtopic(annotations),
