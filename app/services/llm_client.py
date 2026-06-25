@@ -51,7 +51,7 @@ class LLMClient:
                         {"role": "user", "content": prompt}
                     ],
                 },
-                timeout=120,
+                timeout=200,
             )
             data = response.json()
             choices = data.get("choices") or []
