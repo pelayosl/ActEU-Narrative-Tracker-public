@@ -72,9 +72,15 @@ class DocumentRepository:
         self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
     ) -> list[dict]:
         query_filter = self._build_filter(query, proxy_doc_ids)
-        cursor = self._collection.find(query_filter).sort("published_time", -1).limit(
-            settings.DOCUMENT_SEARCH_LIMIT
-        )
+        # Cap the result at DOCUMENT_SEARCH_LIMIT so a single topic-modelling job
+        # has a bounded memory/runtime cost. When the match set exceeds the cap,
+        # take a random sample.
+        pipeline = [
+            {"$match": query_filter},
+            {"$sample": {"size": settings.DOCUMENT_SEARCH_LIMIT}},
+            {"$sort": {"published_time": -1}},
+        ]
+        cursor = await self._collection.aggregate(pipeline, allowDiskUse=True)
         return [doc async for doc in cursor]
 
     async def find_by_ids(self, doc_ids: list[str]) -> list[dict]:

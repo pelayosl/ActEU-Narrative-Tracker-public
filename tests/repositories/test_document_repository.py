@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from app.config import settings
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.search import SearchQuery
 
@@ -160,6 +161,17 @@ class TestFind:
     async def test_empty_collection_returns_empty(self, repo):
         results = await repo.find(SearchQuery())
         assert results == []
+
+    async def test_caps_result_at_document_search_limit(self, repo, populated, monkeypatch):
+        """When the match set exceeds DOCUMENT_SEARCH_LIMIT, find returns a sample of
+        exactly that many documents drawn from the matches."""
+        monkeypatch.setattr(settings, "DOCUMENT_SEARCH_LIMIT", 2)
+        results = await repo.find(SearchQuery())
+        assert len(results) == 2
+        # The sample is drawn from the matching documents, with no duplicates.
+        ids = {str(doc["_id"]) for doc in results}
+        assert len(ids) == 2
+        assert ids.issubset(set(populated))
 
 
 # ---------------------------------------------------------------------------
