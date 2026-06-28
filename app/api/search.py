@@ -20,6 +20,20 @@ async def search(
     current_user: Annotated[User, Depends(get_current_user)],
     project_id: Annotated[str | None, Query()] = None,
 ) -> SearchResult:
+    """Run a faceted document search, optionally scoped to a project.
+
+    When a project scope and subtopics are given, the project's matching proxy doc_ids
+    are resolved first and folded into the query as a union source, and the matched
+    project-subtopic names are appended to each document's ``relevant_topics``.
+
+    :param query: The faceted search query.
+    :param service: The injected search service.
+    :param project_service: The injected project service, used for proxy resolution.
+    :param current_user: The authenticated user.
+    :param project_id: Optional project scope for resolving project subtopics.
+    :returns: The :class:`SearchResult`.
+    :raises HTTPException: 404 / 403 if a supplied project is missing or not owned.
+    """
     # Subtopics can either be in the main document database, or exclusively inside a project
     # proxy_subtopics is used to find whether the selected subtopics are inside a project
     proxy_subtopics: dict[str, list[str]] = {}
@@ -61,4 +75,10 @@ async def get_languages(
     service: Annotated[SearchService, Depends(get_search_service)],
     _: Annotated[User, Depends(get_current_user)],
 ) -> list[str]:
+    """List the languages available as a search facet.
+
+    :param service: The injected search service.
+    :param _: The authenticated user, enforced by the dependency.
+    :returns: The sorted list of available languages.
+    """
     return await service.get_available_languages()

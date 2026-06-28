@@ -1,3 +1,10 @@
+"""Celery application instance for the background worker.
+
+Builds the shared ``celery_app``, loads its configuration from ``app.config`` under the
+``CELERY`` namespace, and autodiscovers the task modules when ``CELERY_AUTODISCOVER`` is
+set (only the worker process needs to import the heavy NLP tasks).
+"""
+
 import os
 
 from celery import Celery

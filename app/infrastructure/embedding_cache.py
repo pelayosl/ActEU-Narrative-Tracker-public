@@ -14,6 +14,11 @@ _QUERY_BATCH = 900
 
 
 def _hash(text: str) -> str:
+    """Compute the SHA-256 hex digest used as a text's cache key.
+
+    :param text: The document text to hash.
+    :returns: The hex-encoded SHA-256 digest.
+    """
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
@@ -21,16 +26,25 @@ class EmbeddingCache:
     """Disk cache for document embeddings, keyed by a SHA-256 of the document text.
 
     Backed by a single SQLite file per embedding model (``<model>.db``). Keying by
-    text hash — not doc_id — means the cache survives a database reload (which mints
-    new ObjectIds) and naturally de-duplicates identical texts.
+    text hash, rather than doc_id, means the cache survives a database reload (which
+    mints new ObjectIds) and naturally de-duplicates identical texts.
 
     The cache is non-authoritative: it stores only derived data and may be deleted
-    at any time at the cost of a one-time recompute. Every operation is best-effort
-    — any I/O failure degrades to a miss (or a no-op write) and is logged, never
+    at any time at the cost of a one-time recompute. Every operation is best-effort,
+    so any I/O failure degrades to a miss (or a no-op write) and is logged, never
     raised, so a cache problem can never fail the pipeline.
     """
 
     def __init__(self, cache_dir: str, model_name: str) -> None:
+        """Open (or create) the per-model SQLite cache file.
+
+        Initialisation is best-effort: if the file or table cannot be opened, the cache
+        is left disabled and every later operation becomes a no-op.
+
+        :param cache_dir: Directory holding the per-model cache files.
+        :param model_name: Embedding model name, used to namespace the cache file so a
+            model change cannot serve stale vectors.
+        """
         slug = model_name.replace("/", "_")
         self._conn: sqlite3.Connection | None = None
         try:
@@ -49,9 +63,13 @@ class EmbeddingCache:
             logger.warning("EmbeddingCache disabled (init failed: %s)", e)
 
     def get_many(self, texts: list[str]) -> tuple[dict[str, np.ndarray], list[str]]:
-        """Look up embeddings for ``texts``. Returns ``(cached, missing)`` where
-        ``cached`` maps text → embedding for hits and ``missing`` is the
-        de-duplicated list of texts that must still be computed."""
+        """Look up embeddings for the given texts.
+
+        :param texts: The texts to look up (may contain duplicates).
+        :returns: A ``(cached, missing)`` tuple where ``cached`` maps each hit text to
+            its embedding and ``missing`` is the de-duplicated list of texts that must
+            still be computed.
+        """
         # De-duplicate by hash while preserving first-seen order.
         unique: list[tuple[str, str]] = []
         seen: set[str] = set()
@@ -88,8 +106,13 @@ class EmbeddingCache:
         return cached, missing
 
     def store_many(self, texts: list[str], embeddings: np.ndarray) -> None:
-        """Persist ``embeddings`` (row-aligned with ``texts``). Best-effort: a
-        failure is logged and swallowed."""
+        """Persist embeddings for their texts, best-effort.
+
+        Duplicate texts are stored once, and any failure is logged and swallowed.
+
+        :param texts: The texts being cached.
+        :param embeddings: The embedding vectors, row-aligned with ``texts``.
+        """
         if self._conn is None:
             return
         try:
@@ -111,6 +134,7 @@ class EmbeddingCache:
             logger.warning("EmbeddingCache write failed (%s), skipping", e)
 
     def close(self) -> None:
+        """Close the underlying SQLite connection if one is open, ignoring errors."""
         if self._conn is not None:
             try:
                 self._conn.close()

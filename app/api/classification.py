@@ -43,6 +43,15 @@ async def train_classifier(
     project_service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
+    """Dispatch a classifier-training job for a project.
+
+    :param body: The request with topics, project_id and name.
+    :param service: The injected classification service.
+    :param project_service: The injected project service, used for the ownership check.
+    :param current_user: The authenticated user.
+    :returns: A ``{"job_id": ...}`` dict for streaming progress.
+    :raises HTTPException: 404 / 403 if the project is missing or not owned.
+    """
     try:
         await project_service.verify_project_owner(body.project_id, current_user.user_id)
     except ProjectNotFound:
@@ -60,8 +69,18 @@ async def apply_initial_labels(
     project_service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> LabellingResult:
-    """Phase 1 labelling: write proxies for the training documents using the classifier's
-    topics (no ML inference). Clears the pending pipeline on success."""
+    """Apply Phase 1 labels synchronously from the training-era mapping.
+
+    Writes proxies for the training documents using the classifier's topics with no ML
+    inference, and clears the pending pipeline on success.
+
+    :param body: The request with project_id and classifier_id.
+    :param project_service: The injected project service.
+    :param current_user: The authenticated user.
+    :returns: The :class:`LabellingResult` summarising the labels written.
+    :raises HTTPException: 404 if the project or classifier is missing, 403 if not
+        owned, 409 if there is no pending pipeline or it no longer matches the classifier.
+    """
     try:
         await project_service.verify_project_owner(body.project_id, current_user.user_id)
         return await project_service.apply_pipeline_labels(body.project_id, body.classifier_id)
@@ -86,8 +105,19 @@ async def label_documents(
     project_service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
-    """Phase 2 labelling: dispatch async job that runs a new query, applies the classifier,
-    and persists proxies. Returns a job_id (poll via /jobs/{job_id}/stream)."""
+    """Dispatch a Phase 2 labelling job for a new query within a project.
+
+    The job runs the query, applies the classifier and persists proxies. Progress is
+    polled via ``/jobs/{job_id}/stream``.
+
+    :param body: The request with project_id, classifier_id and query.
+    :param service: The injected classification service.
+    :param project_service: The injected project service, used for the ownership and
+        classifier-existence checks.
+    :param current_user: The authenticated user.
+    :returns: A ``{"job_id": ...}`` dict for streaming progress.
+    :raises HTTPException: 404 if the project or classifier is missing, 403 if not owned.
+    """
     try:
         await project_service.verify_project_owner(body.project_id, current_user.user_id)
         # Verify the classifier exists in this project before dispatching

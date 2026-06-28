@@ -24,6 +24,16 @@ async def load_dashboard(
     current_user: Annotated[User, Depends(get_current_user)],
     project_id: Annotated[str | None, Query()] = None,
 ) -> Dashboard:
+    """Load the visualisation dashboard for a query, optionally scoped to a project.
+
+    :param query: The visualisation query.
+    :param service: The injected visualisation service.
+    :param project_service: The injected project service, used for the ownership check.
+    :param current_user: The authenticated user.
+    :param project_id: Optional project scope enabling project-subtopic resolution.
+    :returns: The assembled :class:`Dashboard`.
+    :raises HTTPException: 404 / 403 if a supplied project is missing or not owned.
+    """
     if project_id:
         try:
             await project_service.verify_project_owner(project_id, current_user.user_id)

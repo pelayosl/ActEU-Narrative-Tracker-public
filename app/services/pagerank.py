@@ -23,11 +23,15 @@ def top_entities(
 ) -> list[tuple[str, float]]:
     """Rank entities by weighted PageRank over their co-occurrence graph.
 
-    Returns up to `limit` (entity, score) tuples sorted by score descending.
     Handles degenerate inputs gracefully:
       - no entities at all -> []
       - entities that never co-occur (no edges) -> ranked by isolated-node PageRank
         (uniform), still returning the most frequent up to `limit`.
+
+    :param doc_entity_lists: One list of entity names per document, used to build the
+        co-occurrence graph.
+    :param limit: The maximum number of ranked entities to return.
+    :returns: Up to ``limit`` ``(entity, score)`` tuples sorted by score descending.
     """
     # Accumulate undirected edge weights from per-document co-occurrence.
     edge_weights: dict[tuple[str, str], int] = {}

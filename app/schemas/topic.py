@@ -11,6 +11,12 @@ OTHER_TOPIC_ID = "__other__"
 
 
 class Topic(BaseModel):
+    """A topic or subtopic, with provenance for reconciled merges.
+
+    ``origin_topic_ids`` tracks the generation-era topics a reconciled topic was merged
+    from, which supports undoing merges and resolving documents at train time.
+    """
+
     topic_id: str
     name: str
     description: str
@@ -21,11 +27,15 @@ class Topic(BaseModel):
 
 
 class GenerateTopicsRequest(BaseModel):
+    """Request body for topic generation over a project's selected documents."""
+
     project_id: str
     doc_ids: list[str]
 
 
 class ReconciliationRequest(BaseModel):
+    """Request body for topic reconciliation within a project."""
+
     project_id: str
     # Topics the LLM should reconcile (merge among). When the user reconciles a
     # selection, this is just that subset.
@@ -36,12 +46,16 @@ class ReconciliationRequest(BaseModel):
 
 
 class GenerateTopicsResponse(BaseModel):
+    """Result of a topic-generation job, with an LLM-availability flag."""
+
     topics: list[Topic]
     # False when the LLM was unavailable and topics fell back to raw BERTopic labels.
     llm_available: bool = True
 
 
 class ReconciliationResponse(BaseModel):
+    """Result of a reconciliation job, with an LLM-availability flag."""
+
     topics: list[Topic]
     # False when the LLM was unavailable; reconciliation did not run and topics is empty.
     llm_available: bool = True

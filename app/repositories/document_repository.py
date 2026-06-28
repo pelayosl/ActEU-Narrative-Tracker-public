@@ -7,12 +7,36 @@ from app.schemas.search import SearchQuery
 
 
 class DocumentRepository:
+    """Read-only data-access layer for the core ``documents`` collection.
+
+    Backs both search (faceted document queries) and the visualisation dashboard
+    (read-only aggregations: presence over time, language/platform breakdowns, top
+    entities and relevant documents). The collection is immutable, the pipeline
+    never writes to it; labelling is stored in project document proxies instead.
+    """
+
     def __init__(self, db: AsyncDatabase) -> None:
+        """Bind the repository to the ``documents`` collection of the given database.
+
+        :param db: The async MongoDB database handle.
+        """
         self._collection = db["documents"]
 
     def _build_filter(
         self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
     ) -> dict:
+        """Build the MongoDB filter for a faceted search query.
+
+        Combines keyword (headline/plain_text regex), date range, language, platform,
+        core-topic and subtopic facets with ``$and``. Project-proxy doc_ids join the
+        subtopic match as an additional ``$or`` union source. The confidence threshold,
+        when set, gates ``acteu_topic.confidence`` and ``subtopics[].confidence``.
+
+        :param query: The faceted search query.
+        :param proxy_doc_ids: Optional project-proxy doc_ids to union into the subtopic
+            match.
+        :returns: The MongoDB filter document (empty dict when no facets are set).
+        """
         filters: list[dict] = []
 
         for keyword in query.keywords:
@@ -60,6 +84,12 @@ class DocumentRepository:
         return {"$and": filters}
 
     def _coerce_object_ids(self, doc_ids: list[str]) -> list[ObjectId]:
+        """Convert string doc_ids to BSON ``ObjectId``, skipping invalid ones.
+
+        :param doc_ids: The candidate id strings.
+        :returns: The successfully parsed :class:`ObjectId` values (invalid entries are
+            silently dropped).
+        """
         object_ids: list[ObjectId] = []
         for doc_id in doc_ids:
             try:
@@ -71,6 +101,16 @@ class DocumentRepository:
     async def find(
         self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
     ) -> list[dict]:
+        """Return documents matching a search query, capped and sampled.
+
+        The result set is capped at ``DOCUMENT_SEARCH_LIMIT`` via ``$sample`` so a
+        single topic-modelling job has a bounded memory/runtime cost; when the match
+        set exceeds the cap a random sample is taken.
+
+        :param query: The faceted search query.
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the query.
+        :returns: The matching raw document dicts.
+        """
         query_filter = self._build_filter(query, proxy_doc_ids)
         # Cap the result at DOCUMENT_SEARCH_LIMIT so a single topic-modelling job
         # has a bounded memory/runtime cost. When the match set exceeds the cap,
@@ -84,6 +124,11 @@ class DocumentRepository:
         return [doc async for doc in cursor]
 
     async def find_by_ids(self, doc_ids: list[str]) -> list[dict]:
+        """Fetch full documents by their ids.
+
+        :param doc_ids: The document ids to fetch (invalid ids are ignored).
+        :returns: The matching raw document dicts (empty if none are valid/found).
+        """
         object_ids = self._coerce_object_ids(doc_ids)
         if not object_ids:
             return []
@@ -91,13 +136,23 @@ class DocumentRepository:
         return [doc async for doc in cursor]
 
     async def distinct_languages(self) -> list[str]:
-        """Every language value present in at least one document, sorted."""
+        """Return every language value present in at least one document.
+
+        :returns: The sorted distinct, non-empty ``language`` values; backs the
+            ``GET /search/languages`` facet.
+        """
         languages = await self._collection.distinct("language")
         return sorted(lang for lang in languages if lang)
 
     async def count(
         self, query: SearchQuery, proxy_doc_ids: list[str] | None = None
     ) -> int:
+        """Count documents matching a search query (no cap or sampling).
+
+        :param query: The faceted search query.
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the query.
+        :returns: The total number of matching documents.
+        """
         query_filter = self._build_filter(query, proxy_doc_ids)
         return await self._collection.count_documents(query_filter)
 
@@ -120,6 +175,14 @@ class DocumentRepository:
 
         Essentially:
         {"$or": [{"acteu_topic.label": topic}, {"subtopics.topic_id": topic}, {"_id": {"$in": object_ids}}]}
+
+        :param topic: The core-topic slug or subtopic ``topic_id`` to match.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the match.
+        :returns: The MongoDB ``$match`` stage document.
         """
         topic_clauses: list[dict] = [
             {"acteu_topic.label": topic},
@@ -157,8 +220,16 @@ class DocumentRepository:
         platforms: list[str],
         proxy_doc_ids: list[str] | None = None,
     ) -> list[dict]:
-        """Daily document counts for a topic. Returns [{"date": "YYYY-MM-DD", "count": int}]
-        sorted ascending by date."""
+        """Daily document counts for a topic.
+
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the match.
+        :returns: ``[{"date": "YYYY-MM-DD", "count": int}]`` sorted ascending by date.
+        """
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms, proxy_doc_ids
         )
@@ -186,8 +257,16 @@ class DocumentRepository:
         platforms: list[str],
         proxy_doc_ids: list[str] | None = None,
     ) -> list[dict]:
-        """Document counts per language for a topic. Returns
-        [{"language": str, "count": int}] sorted by count descending."""
+        """Document counts per language for a topic.
+
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the match.
+        :returns: ``[{"language": str, "count": int}]`` sorted by count descending.
+        """
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms, proxy_doc_ids
         )
@@ -210,8 +289,16 @@ class DocumentRepository:
         platforms: list[str],
         proxy_doc_ids: list[str] | None = None,
     ) -> list[dict]:
-        """Document counts per platform for a topic. Returns
-        [{"platform": str, "count": int}] sorted by count descending."""
+        """Document counts per platform for a topic.
+
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the match.
+        :returns: ``[{"platform": str, "count": int}]`` sorted by count descending.
+        """
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms, proxy_doc_ids
         )
@@ -234,9 +321,18 @@ class DocumentRepository:
         platforms: list[str],
         proxy_doc_ids: list[str] | None = None,
     ) -> list[list[str]]:
-        """Per-document entity name lists for a topic. 
-        Returns one inner list per matching document, e.g.
-        [["Spain", "Lampedusa"], ["EU"], ...]. Documents with no entities are omitted."""
+        """Per-document entity name lists for a topic (feeds PageRank).
+
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the match.
+        :returns: One inner list of entity names per matching document, e.g.
+            ``[["Spain", "Lampedusa"], ["EU"], ...]``. Documents with no entities are
+            omitted.
+        """
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms, proxy_doc_ids
         )
@@ -264,6 +360,11 @@ class DocumentRepository:
         otherwise the matching subtopics[].confidence (matched by subtopics.topic_id);
         otherwise, when the document matched via a project proxy for this topic, the proxy
         confidence (passed in `proxy_confidence` as a {doc_id: confidence} map); else None.
+
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param proxy_confidence: Optional ``{doc_id: confidence}`` map for project-proxy
+            matches; used as the relevance fallback.
+        :returns: An ``$addFields`` stage adding a ``_relevance`` field.
         '''
         doc_relevance = {
             "$cond": [
@@ -339,8 +440,21 @@ class DocumentRepository:
         """Mean classifier confidence for a topic across all matching documents.
 
         Averages the per-document confidence for the matched topic (core, db-subtopic
-        or project-proxy confidence). Returns `None` when no document has a confidence
-        for the topic."""
+        or project-proxy confidence).
+
+        .. note:: Retained and unit-tested but no longer used for slot apportionment
+            (superseded by :meth:`count_topic_documents`).
+
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_confidence: Optional ``{doc_id: confidence}`` map for project-proxy
+            matches.
+        :returns: The mean confidence, or ``None`` when no document has a confidence
+            for the topic.
+        """
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms,
             list(proxy_confidence) if proxy_confidence else None,
@@ -368,7 +482,17 @@ class DocumentRepository:
         """Number of documents matching a topic under the visualisation constraints.
 
         Counts every document that carries the topic (core, db-subtopic or project
-        proxy), regardless of confidence. Returns 0 when nothing matches."""
+        proxy), regardless of confidence. This is the weight used to apportion sample
+        slots across topics in the dashboard.
+
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_doc_ids: Optional project-proxy doc_ids unioned into the match.
+        :returns: The match count; ``0`` when nothing matches.
+        """
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms, proxy_doc_ids
         )
@@ -394,9 +518,19 @@ class DocumentRepository:
         confidence (from `proxy_confidence`) when matched via a project proxy.
         Documents with no confidence rank below any confident match.
 
-        Returns dicts with keys: doc_id, platform, language, published_time,
-        plain_text, relevance (float | None). Documents are relevance-ordered within
-        each platform; ordering across platforms is unspecified."""
+        :param topic: The core-topic slug or subtopic ``topic_id``.
+        :param date_from: Inclusive lower bound on ``published_time`` (or falsy).
+        :param date_to: Inclusive upper bound on ``published_time`` (or falsy).
+        :param languages: Languages to include (empty = no language filter).
+        :param platforms: Platforms to include (empty = no platform filter).
+        :param proxy_confidence: Optional ``{doc_id: confidence}`` map for project-proxy
+            matches; provides relevance for proxy-matched documents.
+        :param limit: Maximum documents to return *per platform*.
+        :returns: Dicts with keys ``doc_id``, ``platform``, ``language``,
+            ``published_time``, ``plain_text``, ``relevance`` (float | None). Documents
+            are relevance-ordered within each platform; ordering across platforms is
+            unspecified.
+        """
         match = self._build_vis_match(
             topic, date_from, date_to, languages, platforms,
             list(proxy_confidence) if proxy_confidence else None,

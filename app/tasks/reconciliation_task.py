@@ -10,13 +10,33 @@ from app.tasks.celery_app import celery_app
 def reconciliation_task(
     project_id: str, topics: list[dict], passthrough_topics: list[dict] | None = None
 ) -> dict:
-    """Reconcile topics via LLMClient and persist them in the project's pending pipeline."""
+    """Celery entry point for topic reconciliation.
+
+    Reconciles topics via ``LLMClient`` and persists them into the project's pending
+    pipeline.
+
+    :param project_id: The project whose pending pipeline is updated.
+    :param topics: The topics to reconcile, as plain dicts.
+    :param passthrough_topics: Topics kept unchanged and appended to the final list.
+    :returns: A serialised :class:`ReconciliationResponse`.
+    """
     return asyncio.run(_run(project_id, topics, passthrough_topics or []))
 
 
 async def _run(
     project_id: str, topics: list[dict], passthrough_topics: list[dict] | None = None
 ) -> dict:
+    """Execute the async reconciliation for one job.
+
+    Reconciles the topics, and on success persists ``reconciled + passthrough_topics``
+    into the pending pipeline. When the LLM is unavailable it persists nothing and
+    returns an empty topic list with ``llm_available=False``.
+
+    :param project_id: The project whose pending pipeline is updated.
+    :param topics: The topics to reconcile, as plain dicts.
+    :param passthrough_topics: Topics kept unchanged and appended to the final list.
+    :returns: A serialised :class:`ReconciliationResponse`.
+    """
     passthrough_topics = passthrough_topics or []
     parsed = [Topic(**t) for t in topics]
     # Instantiated directly (not via task_context): LLMClient is stateless and

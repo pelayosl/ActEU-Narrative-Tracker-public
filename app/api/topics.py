@@ -26,6 +26,15 @@ async def generate_topics(
     project_service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
+    """Dispatch a topic-generation job for a project's selected documents.
+
+    :param body: The request with project_id and doc_ids.
+    :param service: The injected topic modelling service.
+    :param project_service: The injected project service, used for the ownership check.
+    :param current_user: The authenticated user.
+    :returns: A ``{"job_id": ...}`` dict for streaming progress.
+    :raises HTTPException: 404 / 403 if the project is missing or not owned.
+    """
     try:
         await project_service.verify_project_owner(body.project_id, current_user.user_id)
     except ProjectNotFound:
@@ -44,6 +53,15 @@ async def reconcile_topics(
     project_service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
+    """Dispatch a topic-reconciliation job for a project.
+
+    :param body: The request with project_id, topics and passthrough_topics.
+    :param service: The injected topic modelling service.
+    :param project_service: The injected project service, used for the ownership check.
+    :param current_user: The authenticated user.
+    :returns: A ``{"job_id": ...}`` dict for streaming progress.
+    :raises HTTPException: 404 / 403 if the project is missing or not owned.
+    """
     try:
         await project_service.verify_project_owner(body.project_id, current_user.user_id)
     except ProjectNotFound:

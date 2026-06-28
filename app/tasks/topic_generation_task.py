@@ -36,14 +36,30 @@ MIN_DOCUMENTS_FOR_TOPICS = 10
 
 
 def _update(task: Task, progress: int, step: str) -> None:
+    """Publish a PROGRESS state update for a running Celery task.
+
+    :param task: The bound Celery task to update.
+    :param progress: Percentage complete (0-100).
+    :param step: Short human-readable description of the current step.
+    """
     task.update_state(state="PROGRESS", meta={"progress": progress, "step": step})
 
 
 class OllamaRepresentation(BaseRepresentation):
     """BERTopic representation model that labels each cluster via the university LLM.
-    After fit_transform, access _labels[bert_topic_id] to get (name, description)."""
+
+    Runs during ``fit_transform``. After it completes, ``_labels[bert_topic_id]`` holds
+    the ``(name, description)`` for each cluster.
+    """
 
     def __init__(self, task: Task, topic_count_ref: list) -> None:
+        """Set up the representation model for a single generation run.
+
+        :param task: The bound Celery task, used to emit progress updates while
+            labelling.
+        :param topic_count_ref: A single-element list mutated once clustering reveals
+            the topic count, so progress can be scaled.
+        """
         self._labels: dict[int, tuple[str, str]] = {}
         self._task = task
         # topic_count_ref is a single-element list so we can mutate it from extract_topics
@@ -57,13 +73,6 @@ class OllamaRepresentation(BaseRepresentation):
     # Representative documents per cluster sent to the LLM for labelling.
     REPR_DOC_LIMIT = 6
 
-    '''
-    * Built-in BERTopic representation model hook. Without it, BERTopic uses the raw
-      c-TF-IDF keywords at the topic label.
-    * This function uses Ollama with keywords + representative docs to produce
-      human-readable names and descriptions for each cluster
-    * This runs during fit_transform, it is not a post-processing operation
-    '''
     def extract_topics(
         self,
         topic_model,
@@ -71,6 +80,21 @@ class OllamaRepresentation(BaseRepresentation):
         c_tf_idf,
         topics: dict[int, list[tuple[str, float]]], # 0: [("migration", 0.85), ("border", 0.72), ("asylum", 0.61), ...], ...
     ) -> dict[int, list[tuple[str, float]]]:
+        """Label each cluster via the LLM during ``fit_transform``.
+
+        This is BERTopic's representation-model hook. Without it BERTopic would use the
+        raw c-TF-IDF keywords as the label. For each real cluster it sends the top
+        keywords plus the cluster's representative documents to the LLM, stores the
+        returned name and description, and replaces the cluster's display label.
+        It runs inline during clustering, not as a post-processing step.
+
+        :param topic_model: The calling BERTopic model.
+        :param documents: A DataFrame of documents with Document / Topic / ID columns.
+        :param c_tf_idf: The cluster c-TF-IDF matrix, used to pick representative docs.
+        :param topics: Per-cluster keyword/score lists keyed by BERTopic topic id.
+        :returns: The updated per-cluster keyword/score lists with the LLM name as the
+            leading entry.
+        """
         real_topics = [tid for tid in topics if tid != -1]
         self._topic_count_ref[0] = len(real_topics)
 
@@ -106,12 +130,33 @@ class OllamaRepresentation(BaseRepresentation):
 
 @celery_app.task(bind=True)
 def topic_generation_task(self, project_id: str, doc_ids: list[str]) -> dict:
-    """Run BERTopic on the given documents and label each topic via the university LLM."""
+    """Celery entry point for topic generation.
+
+    Runs BERTopic on the given documents, labels each topic via the university LLM, and
+    persists the result into the project's pending pipeline.
+
+    :param project_id: The project the generated pipeline state belongs to.
+    :param doc_ids: The documents to run topic modelling over.
+    :returns: A serialised :class:`GenerateTopicsResponse`.
+    """
     job_id = self.request.id
     return asyncio.run(_run(self, project_id, doc_ids, job_id))
 
 
 async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> dict:
+    """Execute the async topic-generation pipeline for one job.
+
+    Fetches the documents, embeds them (reusing the embedding cache), clusters with
+    BERTopic, groups doc_ids by assigned topic (stashing the outlier cluster under
+    ``OTHER_TOPIC_ID``), and stores the pending pipeline. Returns an empty response when
+    fewer than ``MIN_DOCUMENTS_FOR_TOPICS`` non-empty documents are available.
+
+    :param task: The bound Celery task, used for progress updates.
+    :param project_id: The project to persist results into.
+    :param doc_ids: The candidate document ids.
+    :param job_id: The Celery job id recorded on the pending pipeline.
+    :returns: A serialised :class:`GenerateTopicsResponse`.
+    """
     _update(task, 5, "Fetching documents")
     async with search_service_context() as service:
         docs = await service.get_documents_by_ids(doc_ids)
@@ -211,6 +256,13 @@ async def _store_pending_pipeline(
     generated_topics: list[Topic],
     topic_mapping: dict[str, list[str]],
 ) -> None:
+    """Persist a fresh pending pipeline holding the generation results.
+
+    :param project_id: The project to update.
+    :param job_id: The generation job id.
+    :param generated_topics: The topics produced by this run.
+    :param topic_mapping: The topic_id to doc_ids mapping (with the outlier entry).
+    """
     pipeline = PendingPipeline(
         generation_job_id=job_id,
         generated_topics=generated_topics,
@@ -223,8 +275,15 @@ async def _store_pending_pipeline(
 
 
 def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str, bool]:
-    """Returns (name, description, llm_ok). On any LLM failure, llm_ok is False and
-    the labels fall back to the raw BERTopic keywords."""
+    """Ask the university LLM for a cluster's name and description.
+
+    On any LLM failure the labels fall back to the raw BERTopic keywords (the first
+    three joined by ``-`` as the name).
+
+    :param keywords: The cluster's top c-TF-IDF keywords.
+    :param rep_docs: The cluster's representative documents (truncated when sent).
+    :returns: A ``(name, description, llm_ok)`` tuple, with ``llm_ok`` False on fallback.
+    """
     keywords_str = ", ".join(keywords[:20])
     docs_str = "\n".join(f"- {doc[:600]}" for doc in rep_docs[:6])
 

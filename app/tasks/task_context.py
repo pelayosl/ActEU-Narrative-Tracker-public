@@ -1,7 +1,7 @@
 """Per-invocation dependency contexts for Celery tasks (no FastAPI DI here).
 
 These context managers exist to own the lifecycle of the two networked backing
-services — Mongo and Redis — that are opened from a settings URL and must be
+services, Mongo and Redis, that are opened from a settings URL and must be
 closed in a `finally`. A dependency belongs here only if it holds such a
 connection (e.g. MutexManager wraps a Redis client). Stateless helpers
 (LLMClient) and local, self-closing resources (EmbeddingCache's SQLite file)
@@ -24,8 +24,13 @@ from app.services.search_service import SearchService
 
 @asynccontextmanager
 async def search_service_context():
-    """Async context manager that creates a Motor client scoped to a single task invocation.
-    Used by Celery tasks that need to call SearchService without FastAPI's DI."""
+    """Provide a SearchService backed by a per-invocation Mongo client.
+
+    Used by Celery tasks that need ``SearchService`` without FastAPI's DI, closing the
+    client when the context exits.
+
+    :yields: A :class:`SearchService` valid for the duration of the context.
+    """
     client = AsyncMongoClient(settings.MONGODB_URL)
     try:
         db = client[settings.MONGODB_DB]
@@ -36,7 +41,13 @@ async def search_service_context():
 
 @asynccontextmanager
 async def project_service_context():
-    """Async context manager for ProjectService, used by Celery tasks."""
+    """Provide a ProjectService backed by a per-invocation Mongo client.
+
+    Used by Celery tasks that need ``ProjectService`` without FastAPI's DI, closing the
+    client when the context exits.
+
+    :yields: A :class:`ProjectService` valid for the duration of the context.
+    """
     client = AsyncMongoClient(settings.MONGODB_URL)
     try:
         db = client[settings.MONGODB_DB]
@@ -47,8 +58,13 @@ async def project_service_context():
 
 @asynccontextmanager
 async def mutex_manager_context():
-    """Async context manager for MutexManager, the only infrastructure class routed
-    through a context, because it wraps a Redis connection that must be closed."""
+    """Provide a MutexManager backed by a per-invocation Redis client.
+
+    This is the only infrastructure class routed through a context, because it wraps a
+    Redis connection that must be closed when the context exits.
+
+    :yields: A :class:`MutexManager` valid for the duration of the context.
+    """
     redis = Redis.from_url(settings.REDIS_URL)
     try:
         yield MutexManager(redis)

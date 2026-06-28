@@ -15,6 +15,13 @@ async def login(
     form: LoginForm,
     service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> AuthToken:
+    """Authenticate credentials and return a bearer token.
+
+    :param form: The login credentials.
+    :param service: The injected auth service.
+    :returns: An :class:`AuthToken` on success.
+    :raises HTTPException: 401 if the credentials are invalid.
+    """
     try:
         return await service.login(form.username, form.password)
     except InvalidCredentials:
@@ -27,6 +34,14 @@ async def register(
     service: Annotated[AuthService, Depends(get_auth_service)],
     _: Annotated[User, Depends(get_current_admin)],
 ) -> User:
+    """Register a new user account (admin only).
+
+    :param form: The new user's registration details.
+    :param service: The injected auth service.
+    :param _: The authenticated admin, enforced by the dependency.
+    :returns: The created user, serialised as :class:`UserPublic`.
+    :raises HTTPException: 409 if the username is already taken.
+    """
     try:
         return await service.register_user(form)
     except UsernameTaken as e:

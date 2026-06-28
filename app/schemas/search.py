@@ -4,6 +4,12 @@ from pydantic import BaseModel
 
 
 class SearchQuery(BaseModel):
+    """Faceted search criteria over the documents collection.
+
+    ``confidence_threshold`` is a single minimum confidence applied uniformly to topic
+    and subtopic matches.
+    """
+
     keywords: list[str] = []
     date_from: datetime | None = None
     date_to: datetime | None = None
@@ -15,6 +21,8 @@ class SearchQuery(BaseModel):
 
 
 class DocumentSummary(BaseModel):
+    """Presentation view of a matched document, carrying an excerpt rather than full text."""
+
     doc_id: str
     headline: str
     excerpt: str
@@ -25,6 +33,8 @@ class DocumentSummary(BaseModel):
 
 
 class SearchResult(BaseModel):
+    """A page of search results: the total match count and the returned summaries."""
+
     total_docs: int
     retrieved_docs: list[DocumentSummary]
 

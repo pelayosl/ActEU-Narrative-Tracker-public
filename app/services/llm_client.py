@@ -16,9 +16,18 @@ class LLMClient:
     because it encapsulates prompt engineering, response parsing, and fallback logic."""
 
     def reconcile(self, topics: list[Topic]) -> tuple[list[Topic], bool]:
-        """Returns (reconciled_topics, llm_available). When the LLM is unavailable the
-        flag is False and the second element is the unchanged fallback list — the
-        caller decides whether to use or discard it."""
+        """Merge similar topics via the university LLM, with a graceful fallback.
+
+        Sends the topics to the LLM with a reconciliation prompt, parses the JSON
+        response, and rebuilds the merged topics while preserving every input topic. On
+        any failure it logs a warning and returns the unchanged input as a fallback,
+        leaving the decision to use or discard it to the caller.
+
+        :param topics: The topics to reconcile.
+        :returns: A ``(reconciled_topics, llm_available)`` tuple. When the LLM is
+            unavailable the flag is ``False`` and the topics are the unchanged fallback
+            list.
+        """
         valid_ids = {t.topic_id for t in topics}
         topics_payload = [
             {"id": t.topic_id, "name": t.name, "description": t.description}
@@ -71,7 +80,12 @@ class LLMClient:
 
 
 def _extract_json(text: str) -> list[dict]:
-    """Extract a JSON array from the LLM response, removing markdown code fences."""
+    """Extract a JSON array from the LLM response, removing markdown code fences.
+
+    :param text: The raw assistant message content.
+    :returns: The parsed JSON array.
+    :raises json.JSONDecodeError: If the cleaned text is not valid JSON.
+    """
     text = text.strip()
     # Strip ```json ... ``` or ``` ... ``` fences if present
     text = re.sub(r"^```(?:json)?\s*", "", text)
@@ -85,6 +99,9 @@ def _generation_ids(topic: Topic) -> list[str]:
     A manually merged topic carries its constituents' generation ids in
     origin_topic_ids; a raw generated topic uses its own id. Reconciliation must
     propagate these so merged topics keep mapping to their documents at train time.
+
+    :param topic: The topic whose generation-era ids are needed.
+    :returns: The topic's ``origin_topic_ids``, or ``[topic_id]`` when it has none.
     """
     return topic.origin_topic_ids if topic.origin_topic_ids else [topic.topic_id]
 
@@ -99,6 +116,14 @@ def _build_topics(
     The LLM groups by the surface topic_ids it was given, but origin_topic_ids on
     the output must always be generation-era ids (the topic_mapping keys). We
     therefore flatten each surface id back to its generation ids transitively.
+
+    :param parsed: The LLM-produced groups (each with name, description,
+        origin_topic_ids).
+    :param valid_ids: The set of legitimate input topic_ids, used to drop
+        hallucinated ids.
+    :param originals: The original input topics, indexed for id resolution and to
+        preserve any the LLM dropped.
+    :returns: The reconciled topics, with every input topic represented exactly once.
     """
     by_id = {t.topic_id: t for t in originals}
     covered_surface_ids: set[str] = set()
@@ -134,7 +159,11 @@ def _build_topics(
 
 
 def _fallback(topics: list[Topic]) -> list[Topic]:
-    """Return original topics unchanged if the LLM call fails entirely."""
+    """Return the original topics unchanged when the LLM call fails entirely.
+
+    :param topics: The input topics to pass through.
+    :returns: The same topics, each with its generation-era ``origin_topic_ids``.
+    """
     return [
         Topic(
             topic_id=t.topic_id,

@@ -14,11 +14,31 @@ from app.tasks.celery_app import celery_app
 def classifier_training_task(
     topics: list[dict], project_id: str, name: str
 ) -> dict:
-    """Train a FastText classifier on the validated topics."""
+    """Celery entry point for classifier training.
+
+    :param topics: The validated topics to train on, as plain dicts.
+    :param project_id: The project the classifier will belong to.
+    :param name: The name to give the trained classifier.
+    :returns: A serialised :class:`ClassifierMetadata`.
+    """
     return asyncio.run(_run(topics, project_id, name))
 
 
 async def _run(topics: list[dict], project_id: str, name: str) -> dict:
+    """Execute the async classifier training for one job.
+
+    Reads the topic_mapping from the project's pending pipeline, builds training pairs
+    by unioning each topic's origin documents (plus the reserved ``OTHER_TOPIC_ID``
+    outlier class), fetches the document texts, trains and saves a FastText model, then
+    saves the classifier metadata and stamps its id onto the pending pipeline.
+
+    :param topics: The validated topics to train on, as plain dicts.
+    :param project_id: The project to train within.
+    :param name: The name to give the trained classifier.
+    :returns: A serialised :class:`ClassifierMetadata`.
+    :raises ValueError: If there is no pending pipeline, no training data, or every
+        document had empty text.
+    """
     validated_topics = [Topic(**t) for t in topics]
 
     # Retrieve topic_id → doc_ids mapping from the project's pending pipeline

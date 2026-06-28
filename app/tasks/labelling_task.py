@@ -14,17 +14,39 @@ from app.tasks.celery_app import celery_app
 
 
 def _lock_key(project_id: str) -> str:
+    """Build the per-project Redis mutex key for Phase 2 labelling.
+
+    :param project_id: The project being labelled.
+    :returns: The lock key string scoped to the project.
+    """
     return f"labelling:project:{project_id}"
 
 
 @celery_app.task
 def labelling_task(project_id: str, classifier_id: str, query: dict) -> dict:
-    """Phase 2 labelling: runs a new search, applies the trained classifier, persists proxies.
-    Depends on: ClassifierWrapper, MutexManager, SearchService, ProjectService."""
+    """Celery entry point for Phase 2 labelling.
+
+    Runs a new search, applies the trained classifier, and persists the resulting
+    document proxies. Depends on ClassifierWrapper, MutexManager, SearchService and
+    ProjectService.
+
+    :param project_id: The project whose proxies receive the labels.
+    :param classifier_id: The classifier used to predict labels.
+    :param query: The serialised search query selecting documents to label.
+    :returns: A serialised :class:`LabellingResult`.
+    """
     return asyncio.run(_run(project_id, classifier_id, query))
 
 
 async def _run(project_id: str, classifier_id: str, query: dict) -> dict:
+    """Acquire the per-project mutex and run the labelling, releasing it afterward.
+
+    :param project_id: The project being labelled.
+    :param classifier_id: The classifier used to predict labels.
+    :param query: The serialised search query.
+    :returns: A serialised :class:`LabellingResult`.
+    :raises LabellingLocked: If another labelling job already holds the project's lock.
+    """
     search_query = SearchQuery(**query)
     key = _lock_key(project_id)
 
@@ -43,6 +65,17 @@ async def _run(project_id: str, classifier_id: str, query: dict) -> dict:
 async def _label(
     project_id: str, classifier_id: str, query: SearchQuery
 ) -> LabellingResult:
+    """Run the new query, predict labels and persist proxies for the matched documents.
+
+    Loads the classifier, drops candidates already labelled by it, predicts a label per
+    document (skipping the reserved ``OTHER_TOPIC_ID`` and any prediction outside the
+    classifier's topics), and upserts the resulting proxies into the project.
+
+    :param project_id: The project whose proxies receive the labels.
+    :param classifier_id: The classifier used to predict labels.
+    :param query: The search query selecting candidate documents.
+    :returns: A :class:`LabellingResult` summarising the labels written.
+    """
     # Load classifier metadata (topics + file_path)
     async with project_service_context() as project_service:
         classifier = await project_service.get_classifier(project_id, classifier_id)

@@ -23,6 +23,13 @@ async def create_project(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Project:
+    """Create a new project owned by the authenticated user.
+
+    :param name: The project name.
+    :param service: The injected project service.
+    :param current_user: The authenticated user, who becomes the owner.
+    :returns: The created :class:`Project`.
+    """
     return await service.create_project(current_user.user_id, name)
 
 
@@ -31,6 +38,12 @@ async def list_projects(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> list[Project]:
+    """List the authenticated user's projects.
+
+    :param service: The injected project service.
+    :param current_user: The authenticated user.
+    :returns: The user's projects.
+    """
     return await service.list_projects(current_user.user_id)
 
 
@@ -40,6 +53,14 @@ async def get_project(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Project:
+    """Fetch a single project owned by the authenticated user.
+
+    :param project_id: The project to fetch.
+    :param service: The injected project service.
+    :param current_user: The authenticated user.
+    :returns: The :class:`Project`.
+    :raises HTTPException: 404 if missing, 403 if not owned.
+    """
     try:
         await service.verify_project_owner(project_id, current_user.user_id)
         return await service.get_project(project_id)
@@ -55,6 +76,13 @@ async def delete_project(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
+    """Delete a project owned by the authenticated user.
+
+    :param project_id: The project to delete.
+    :param service: The injected project service.
+    :param current_user: The authenticated user.
+    :raises HTTPException: 404 if missing, 403 if not owned.
+    """
     try:
         await service.verify_project_owner(project_id, current_user.user_id)
         await service.delete_project(project_id)
@@ -71,6 +99,16 @@ async def download_classifier(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> FileResponse:
+    """Download a classifier's FastText ``.bin`` model file.
+
+    :param project_id: The project that owns the classifier.
+    :param classifier_id: The classifier to download.
+    :param service: The injected project service.
+    :param current_user: The authenticated user.
+    :returns: A :class:`FileResponse` streaming the model file.
+    :raises HTTPException: 404 if the project, classifier or file is missing, 403 if
+        not owned.
+    """
     try:
         await service.verify_project_owner(project_id, current_user.user_id)
         classifier = await service.get_classifier(project_id, classifier_id)
@@ -98,6 +136,14 @@ async def delete_classifier(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
+    """Delete a classifier and cascade-remove what it produced.
+
+    :param project_id: The project that owns the classifier.
+    :param classifier_id: The classifier to delete.
+    :param service: The injected project service.
+    :param current_user: The authenticated user.
+    :raises HTTPException: 404 if the project or classifier is missing, 403 if not owned.
+    """
     try:
         await service.verify_project_owner(project_id, current_user.user_id)
         await service.delete_classifier(project_id, classifier_id)
@@ -115,8 +161,17 @@ async def get_available_topics(
     service: Annotated[ProjectService, Depends(get_project_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> SearchTopics:
-    """Search-form topic facets for a project, sourced from the database: the 3 core
-    ACTEU topics + subtopics (db-native ∪ this project's classifier subtopics)."""
+    """Return the search-form topic facets for a project.
+
+    Sourced from the database: the 3 core ACTEU topics plus the subtopics available to
+    this project (db-native subtopics combined with the project's classifier subtopics).
+
+    :param project_id: The project to compose facets for.
+    :param service: The injected project service.
+    :param current_user: The authenticated user.
+    :returns: The :class:`SearchTopics` facets.
+    :raises HTTPException: 404 if missing, 403 if not owned.
+    """
     try:
         await service.verify_project_owner(project_id, current_user.user_id)
         return await service.get_available_topics(project_id)

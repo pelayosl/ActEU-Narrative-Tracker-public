@@ -20,17 +20,38 @@ EXCERPT_MAX_CHARS = 250
 
 
 class VisualisationService:
+    """Builds the visualisation dashboard from read-only document aggregations.
+
+    For each query topic it assembles presence over time, language and platform
+    breakdowns, top entities (via PageRank) and a relevance-ranked document sample.
+    Topics resolve against the core documents collection and, when a project scope is
+    supplied, against that project's subtopic proxies through :class:`ProjectService`.
+    """
+
     def __init__(
         self,
         document_repo: DocumentRepository,
         project_service: ProjectService,
     ) -> None:
+        """Store the document repository and project service this service reads from.
+
+        :param document_repo: Repository for the core documents aggregations.
+        :param project_service: Service used to resolve project-scoped subtopics to
+            document ids and confidences.
+        """
         self._document_repo = document_repo
         self._project_service = project_service
 
     async def load_dashboard(
         self, query: VisualisationQuery, project_id: str | None = None
     ) -> Dashboard:
+        """Assemble the full dashboard for a visualisation query.
+
+        :param query: The visualisation query (topics, date range, languages,
+            platforms, sample size).
+        :param project_id: Optional project scope, enabling project-subtopic resolution.
+        :returns: The assembled :class:`Dashboard`.
+        """
         proxy_confidence = await self._resolve_proxy_confidence(query.topics, project_id)
         # The count/entity blocks only need the matched doc_ids per topic.
         proxy_doc_ids = {topic: list(conf) for topic, conf in proxy_confidence.items()}
@@ -52,8 +73,13 @@ class VisualisationService:
     async def _resolve_proxy_confidence(
         self, topics: list[str], project_id: str | None
     ) -> dict[str, dict[str, float]]:
-        """Resolve, per topic, the project proxy {doc_id: confidence} map. Returns an
-        empty mapping when no project scope is supplied."""
+        """Resolve, per topic, the project proxy ``{doc_id: confidence}`` map.
+
+        :param topics: The query topics to resolve.
+        :param project_id: Optional project scope.
+        :returns: A ``{topic: {doc_id: confidence}}`` map, empty when no project scope
+            is supplied.
+        """
         if not project_id:
             return {}
         return await self._project_service.get_proxy_confidence_by_topics(project_id, topics)
@@ -61,6 +87,12 @@ class VisualisationService:
     async def _topic_evolution(
         self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
     ) -> list[TopicTimeSeries]:
+        """Build the per-topic daily document-count time series.
+
+        :param query: The visualisation query.
+        :param proxy_doc_ids: Per-topic project-proxy doc_ids to union into each match.
+        :returns: One :class:`TopicTimeSeries` per query topic.
+        """
         series_list: list[TopicTimeSeries] = []
         for topic in query.topics:
             points = await self._document_repo.topic_presence_over_time(
@@ -82,6 +114,12 @@ class VisualisationService:
     async def _topics_by_language(
         self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
     ) -> list[TopicLanguageBreakdown]:
+        """Build the per-topic document-count breakdown by language.
+
+        :param query: The visualisation query.
+        :param proxy_doc_ids: Per-topic project-proxy doc_ids to union into each match.
+        :returns: One :class:`TopicLanguageBreakdown` per query topic.
+        """
         breakdowns: list[TopicLanguageBreakdown] = []
         for topic in query.topics:
             counts = await self._document_repo.topic_presence_by_language(
@@ -106,6 +144,12 @@ class VisualisationService:
     async def _topics_by_platform(
         self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
     ) -> list[TopicPlatformBreakdown]:
+        """Build the per-topic document-count breakdown by platform.
+
+        :param query: The visualisation query.
+        :param proxy_doc_ids: Per-topic project-proxy doc_ids to union into each match.
+        :returns: One :class:`TopicPlatformBreakdown` per query topic.
+        """
         breakdowns: list[TopicPlatformBreakdown] = []
         for topic in query.topics:
             counts = await self._document_repo.topic_presence_by_platform(
@@ -130,6 +174,13 @@ class VisualisationService:
     async def _top_entities(
         self, query: VisualisationQuery, proxy_doc_ids: dict[str, list[str]]
     ) -> list[TopicEntities]:
+        """Build the per-topic top entities ranked by PageRank.
+
+        :param query: The visualisation query.
+        :param proxy_doc_ids: Per-topic project-proxy doc_ids to union into each match.
+        :returns: One :class:`TopicEntities` per query topic, each with up to
+            ``TOP_ENTITIES_LIMIT`` entities.
+        """
         results: list[TopicEntities] = []
         for topic in query.topics:
             doc_entity_lists = await self._document_repo.entities_for_topic(
@@ -161,7 +212,13 @@ class VisualisationService:
         narrow topic that overlaps a broader one still gets its own examples). Slots a
         sparse topic cannot fill are redistributed to the remaining documents of other
         topics, so the sample reaches `sample_size` whenever enough documents exist.
-        The result is sorted by relevance descending."""
+        The result is sorted by relevance descending.
+
+        :param query: The visualisation query (its ``sample_size`` sets the budget).
+        :param proxy_confidence: Per-topic ``{doc_id: confidence}`` maps for project
+            proxies, used both to match and to rank proxy documents.
+        :returns: The sampled :class:`DocumentPreview` list, relevance-ranked.
+        """
         if not query.topics:
             return []
 
@@ -240,7 +297,13 @@ class VisualisationService:
         the remainder distributed proportionally to each topic's weight (document count)
         using the largest-remainder method so the parts sum exactly to `sample_size`.
 
-        Assumes `sample_size >= len(weights)`"""
+        Assumes `sample_size >= len(weights)`.
+
+        :param weights: Per-topic weights (document counts) driving the proportional
+            split.
+        :param sample_size: The total number of slots to distribute.
+        :returns: A ``{topic: slot_count}`` map summing to ``sample_size``.
+        """
         topics = list(weights)
         slots = dict.fromkeys(topics, 1)
         remaining = sample_size - len(topics)
@@ -277,7 +340,11 @@ class VisualisationService:
         order of their most relevant document. The head of the list stays
         high-relevance, but no single platform fills the early slots while other
         platforms still have documents to offer. A single-platform list is returned
-        unchanged."""
+        unchanged.
+
+        :param docs: A relevance-sorted list of document dicts (with a ``platform`` key).
+        :returns: The same documents reordered to interleave platforms.
+        """
         if not docs:
             return docs
 
@@ -301,13 +368,21 @@ class VisualisationService:
 
     @staticmethod
     def _relevance_rank(doc: dict) -> float:
-        """Sort key: documents with no confidence rank below any
-        confident match."""
+        """Compute a sort key where documents with no confidence rank last.
+
+        :param doc: A document dict with an optional ``relevance`` key.
+        :returns: The relevance value, or ``-1.0`` when it is absent.
+        """
         relevance = doc.get("relevance")
         return relevance if relevance is not None else -1.0
 
     @staticmethod
     def _excerpt(plain_text: str) -> str:
+        """Truncate text to a preview excerpt of at most ``EXCERPT_MAX_CHARS``.
+
+        :param plain_text: The document's full text.
+        :returns: The trimmed excerpt, suffixed with ``...`` when truncated.
+        """
         text = (plain_text or "").strip()
         if len(text) > EXCERPT_MAX_CHARS:
             return f"{text[:EXCERPT_MAX_CHARS].rstrip()}..."
