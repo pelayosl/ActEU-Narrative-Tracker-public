@@ -176,7 +176,7 @@ async def _run(task: Task, project_id: str, doc_ids: list[str], job_id: str) -> 
     filtered_doc_ids = [doc_id for _, doc_id in text_doc_pairs]
 
     _update(task, 10, "Computing embeddings")
-    embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, token=settings.HF_TOKEN, trust_remote_code=True)
+    embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, token=settings.HF_TOKEN.get_secret_value(), trust_remote_code=True)
 
     # Reuse previously computed vectors; embed only texts not already cached.
     # Keyed by text hash, so the cache survives DB reloads and de-duplicates texts.
@@ -303,7 +303,7 @@ def _call_ollama(keywords: list[str], rep_docs: list[str]) -> tuple[str, str, bo
         response = httpx.post(
                 settings.OLLAMA_URL,
                 headers={
-                    "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                    "Authorization": f"Bearer {settings.LLM_API_KEY.get_secret_value()}",
                     "Content-Type": "application/json",
                 },
                 json={

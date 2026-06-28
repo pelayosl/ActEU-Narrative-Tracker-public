@@ -51,7 +51,7 @@ class LLMClient:
             response = httpx.post(
                 settings.OLLAMA_URL,
                 headers={
-                    "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                    "Authorization": f"Bearer {settings.LLM_API_KEY.get_secret_value()}",
                     "Content-Type": "application/json",
                 },
                 json={
