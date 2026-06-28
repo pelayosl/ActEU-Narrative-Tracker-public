@@ -40,7 +40,7 @@ class TestRoundTrip:
         token = handler.encode({"sub": "user-1"})
 
         # Decoding with the right secret/alg works...
-        jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        jwt.decode(token, settings.JWT_SECRET.get_secret_value(), algorithms=[settings.JWT_ALGORITHM])
         # ...and with a wrong secret it does not.
         with pytest.raises(jwt.InvalidTokenError):
             jwt.decode(token, "wrong-secret", algorithms=[settings.JWT_ALGORITHM])

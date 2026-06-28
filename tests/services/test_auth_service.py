@@ -106,7 +106,7 @@ class TestVerifyToken:
         from app.config import settings
         expired_token = pyjwt.encode(
             {"sub": "x", "username": "ada", "role": "user", "exp": datetime(2000, 1, 1, tzinfo=timezone.utc)},
-            settings.JWT_SECRET,
+            settings.JWT_SECRET.get_secret_value(),
             algorithm=settings.JWT_ALGORITHM,
         )
         with pytest.raises(TokenExpired):
