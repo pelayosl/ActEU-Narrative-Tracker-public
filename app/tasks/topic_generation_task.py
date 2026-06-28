@@ -1,3 +1,14 @@
+"""Topic generation Celery task (BERTopic + LLM labelling).
+
+Defines ``topic_generation_task``, which clusters the selected documents with BERTopic
+and labels each cluster via the university LLM. The async helper ``_run`` orchestrates
+the flow: fetch documents, embed them (reusing the SQLite embedding cache), cluster, group
+doc_ids per topic (stashing the outlier cluster under ``OTHER_TOPIC_ID``), and persist the
+pending pipeline via ``_store_pending_pipeline``. ``OllamaRepresentation`` is the BERTopic
+representation hook that names each cluster during ``fit_transform``, and ``_call_ollama``
+performs the per-cluster LLM call, falling back to raw keywords when the LLM is down.
+"""
+
 import asyncio
 import json
 import logging

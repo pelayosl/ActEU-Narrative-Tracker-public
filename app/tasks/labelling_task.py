@@ -1,3 +1,13 @@
+"""Phase 2 labelling Celery task.
+
+Defines ``labelling_task``, which labels the documents of a new in-project query with a
+trained classifier. The work is split across module helpers: ``_run`` acquires the
+per-project Redis mutex (so only one labelling job runs per project) and delegates to
+``_label``, which loads the classifier, drops already-labelled candidates, predicts a
+label per document, and upserts the resulting proxies. ``_lock_key`` builds the mutex
+key. The core documents collection is never written to.
+"""
+
 import asyncio
 
 from app.exceptions import LabellingLocked

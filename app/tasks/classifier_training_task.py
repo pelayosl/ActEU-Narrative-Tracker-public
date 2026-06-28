@@ -1,3 +1,12 @@
+"""Classifier training Celery task.
+
+Defines ``classifier_training_task``, which trains a FastText classifier from the
+project's pending-pipeline topic mapping. The async helper ``_run`` builds training pairs
+by unioning each topic's origin documents (plus the reserved ``OTHER_TOPIC_ID`` outlier
+class), fetches the document texts, trains and saves the model, then stores the classifier
+metadata and stamps its id onto the pending pipeline.
+"""
+
 import asyncio
 import uuid
 from datetime import datetime, timezone

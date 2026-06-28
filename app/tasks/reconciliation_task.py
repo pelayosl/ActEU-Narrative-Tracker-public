@@ -1,3 +1,12 @@
+"""Topic reconciliation Celery task.
+
+Defines ``reconciliation_task``, which merges similar topics via ``LLMClient`` and
+persists the result into the project's pending pipeline. The async helper ``_run`` does
+the work: it reconciles the selected topics, appends the passthrough (unselected) topics
+unchanged, and stores the combined list. When the LLM is unavailable it persists nothing
+and reports ``llm_available=False``.
+"""
+
 import asyncio
 
 from app.tasks.task_context import project_service_context
