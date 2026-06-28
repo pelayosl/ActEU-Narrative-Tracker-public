@@ -30,3 +30,6 @@ certs/
 # Coverage
 .coverage
 htmlcov/
+
+# Generated pydoc HTML (reproducible via scripts/generate_docs.py)
+docs/code/
