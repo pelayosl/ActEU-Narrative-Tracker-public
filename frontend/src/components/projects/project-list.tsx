@@ -121,9 +121,9 @@ export function ProjectList() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-border bg-white">
+      <div className="overflow-x-auto rounded-lg border border-border bg-white">
         {/* Header */}
-        <div className="grid grid-cols-[1fr_140px_120px_44px] gap-3 border-b border-border px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+        <div className="grid min-w-[36rem] grid-cols-[1fr_140px_120px_44px] gap-3 border-b border-border px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
           <span>Project</span>
           <span>Created</span>
           <span>Classifiers</span>
@@ -135,7 +135,7 @@ export function ProjectList() {
             const expanded = expandedId === project.project_id;
             return (
               <li key={project.project_id} className="border-b border-border last:border-0">
-                <div className="grid grid-cols-[1fr_140px_120px_44px] items-center gap-3 px-4 py-3">
+                <div className="grid min-w-[36rem] grid-cols-[1fr_140px_120px_44px] items-center gap-3 px-4 py-3">
                   <button
                     onClick={() => setExpandedId(expanded ? null : project.project_id)}
                     className="flex items-center gap-2 text-left font-medium text-ink"
@@ -162,8 +162,8 @@ export function ProjectList() {
                         No classifiers trained in this project yet.
                       </p>
                     ) : (
-                      <div className="overflow-hidden rounded-md border border-border bg-white">
-                        <div className="grid grid-cols-[1fr_1.4fr_120px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
+                      <div className="overflow-x-auto rounded-md border border-border bg-white">
+                        <div className="grid min-w-[34rem] grid-cols-[1fr_1.4fr_120px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
                           <span>Name</span>
                           <span>Topics</span>
                           <span>Created</span>
@@ -173,7 +173,7 @@ export function ProjectList() {
                           {project.classifiers.map((classifier) => (
                             <li
                               key={classifier.classifier_id}
-                              className="grid grid-cols-[1fr_1.4fr_120px_120px] items-center gap-3 border-b border-border px-3 py-2 last:border-0"
+                              className="grid min-w-[34rem] grid-cols-[1fr_1.4fr_120px_120px] items-center gap-3 border-b border-border px-3 py-2 last:border-0"
                             >
                               <span className="text-sm font-medium text-ink">{classifier.name}</span>
                               <div className="flex flex-wrap gap-1">
