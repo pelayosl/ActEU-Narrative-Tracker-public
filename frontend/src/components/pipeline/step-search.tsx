@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { SearchForm } from "./search-form";
 import { DocumentCard } from "./document-card";
 import { PlatformBadge } from "./platform-badge";
@@ -53,6 +53,10 @@ export function StepSearch() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  // "Scroll to Generate Topics" hint — shown after a search when the results push
+  // the action below the fold; hidden on any scroll or once clicked.
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   // Core topics arrive in relevant_topics as their db slug (e.g. "gender_issues").
   // Resolve them to the display label so they read like the subtopic labels.
@@ -101,6 +105,32 @@ export function StepSearch() {
   function goToPage(next: number) {
     setPage(next);
     setSelectedId(docs[next * PAGE_SIZE]?.doc_id ?? null);
+  }
+
+  // Show the hint whenever there are results and the user is not yet at the bottom
+  // of the page (so it stays visible while scrolling and only hides at the end).
+  useEffect(() => {
+    if (!result || docs.length === 0) {
+      setShowScrollHint(false);
+      return;
+    }
+    const update = () => {
+      const atBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100;
+      setShowScrollHint(!atBottom);
+    };
+    const id = requestAnimationFrame(update);
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [result, docs.length]);
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 
   return (
@@ -231,11 +261,24 @@ export function StepSearch() {
           )}
 
           {docs.length > 0 && (
-            <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
-              {generate.isPending ? "Starting…" : "Generate Topics →"}
-            </Button>
+            <div ref={bottomRef}>
+              <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
+                {generate.isPending ? "Starting…" : "Generate Topics →"}
+              </Button>
+            </div>
           )}
         </div>
+      )}
+
+      {showScrollHint && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          aria-label="Scroll down to Generate Topics"
+          className="fixed bottom-6 right-6 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-acteu-red text-white shadow-lg transition-opacity hover:opacity-90"
+        >
+          <ChevronDown className="h-5 w-5" />
+        </button>
       )}
     </div>
   );
