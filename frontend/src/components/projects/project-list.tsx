@@ -121,7 +121,7 @@ export function ProjectList() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-white">
+      <div className="overflow-x-auto rounded-lg border border-acteu-red bg-white">
         {/* Header */}
         <div className="grid min-w-[36rem] grid-cols-[1fr_140px_120px_44px] gap-3 border-b border-border px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
           <span>Project</span>
@@ -178,7 +178,7 @@ export function ProjectList() {
                               <span className="text-sm font-medium text-ink">{classifier.name}</span>
                               <div className="flex flex-wrap gap-1">
                                 {classifier.topics.map((t) => (
-                                  <span key={t.topic_id} className="rounded bg-bg px-1.5 py-0.5 text-xs text-ink">
+                                  <span key={t.topic_id} className="rounded bg-acteu-red/10 px-1.5 py-0.5 text-xs font-medium text-acteu-red">
                                     {t.name}
                                   </span>
                                 ))}
