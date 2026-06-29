@@ -47,7 +47,7 @@ export default function VisualiserPage() {
   }
 
   return (
-    <div className="grid grid-cols-[320px_1fr] gap-6">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr] lg:items-start">
       <QueryPanel onLoad={handleLoad} loading={load.isPending} />
 
       <div className="space-y-6">

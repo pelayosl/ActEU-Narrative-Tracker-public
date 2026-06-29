@@ -25,8 +25,10 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex w-60 flex-col border-r border-border bg-white",
-        // When narrow, hover over the content instead of pushing it aside.
-        isNarrow && "fixed inset-y-0 left-0 z-40 shadow-lg",
+        // Pin to the viewport so the profile section at the bottom stays visible
+        // regardless of how tall the page content is. When narrow, hover over the
+        // content instead of pushing it aside.
+        isNarrow ? "fixed inset-y-0 left-0 z-40 shadow-lg" : "sticky top-0 h-screen",
       )}
     >
       <div className="flex items-center justify-between p-4">

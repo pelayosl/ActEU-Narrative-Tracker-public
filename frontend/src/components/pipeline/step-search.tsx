@@ -191,7 +191,8 @@ export function StepSearch() {
                 )}
               </div>
 
-              <div className="space-y-2">
+              {/* Sticky so the preview stays in view while scrolling a long result list. */}
+              <div className="space-y-2 lg:sticky lg:top-6 lg:self-start">
                 <p className="text-sm font-medium text-ink">Document Preview</p>
                 {selectedDoc ? (
                   <div className="rounded-md border border-border bg-white p-4">

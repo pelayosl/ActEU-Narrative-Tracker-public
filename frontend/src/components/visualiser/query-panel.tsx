@@ -153,7 +153,7 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
   }
 
   return (
-    <aside className="space-y-5 rounded-lg border border-border bg-white p-4">
+    <aside className="space-y-5 rounded-lg border border-border bg-white p-4 lg:sticky lg:top-6">
       <div>
         <h2 className="font-semibold text-ink">Parameters</h2>
         <p className="text-sm text-muted-foreground">Configure your visualisation filters.</p>
