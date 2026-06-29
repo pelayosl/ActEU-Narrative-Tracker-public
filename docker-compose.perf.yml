@@ -1,0 +1,31 @@
+# Performance / load-testing override for the production stack.
+#
+# Layer this ON TOP of docker-compose.prod.yml. It does two things, and nothing else:
+#   1. publishes the FastAPI `api` service on 127.0.0.1:8000 so Locust can drive it
+#      directly (loopback only — NOT exposed to the VPN network);
+#   2. mounts a shared `perf_logs` volume into both `api` and `worker` and points
+#      TIMING_LOG_PATH at a per-service file inside it, so the timing logs survive and
+#      both files can be parsed together (the parser pairs dispatch/task by job_id).
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.perf.yml up -d --build
+#
+# Tear the port/volume back down by bringing the stack up again WITHOUT this file.
+
+services:
+  api:
+    ports:
+      - "127.0.0.1:8000:8000"   # loopback only; Locust runs on the host
+    environment:
+      TIMING_LOG_PATH: /app/perf_logs/api.log
+    volumes:
+      - perf_logs:/app/perf_logs
+
+  worker:
+    environment:
+      TIMING_LOG_PATH: /app/perf_logs/worker.log
+    volumes:
+      - perf_logs:/app/perf_logs
+
+volumes:
+  perf_logs:
