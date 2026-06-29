@@ -16,12 +16,19 @@ const items = [
 export function Sidebar() {
   const pathname = usePathname();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const isNarrow = useUiStore((s) => s.isNarrow);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
   if (!sidebarOpen) return null;
 
   return (
-    <aside className="flex w-60 flex-col border-r border-border bg-white">
+    <aside
+      className={cn(
+        "flex w-60 flex-col border-r border-border bg-white",
+        // When narrow, hover over the content instead of pushing it aside.
+        isNarrow && "fixed inset-y-0 left-0 z-40 shadow-lg",
+      )}
+    >
       <div className="flex items-center justify-between p-4">
         <Link
           href="/home"
