@@ -93,6 +93,17 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
   const labelFor = (value: string) =>
     topicOptions.find((o) => o.value === value)?.label ?? value;
 
+  // Project-specific subtopics are exactly the topic_ids embedded in this project's
+  // classifiers (db-native subtopics and core topics are never there). Used to tint
+  // them differently in the picker.
+  const projectSubtopicIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const classifier of activeProject?.classifiers ?? []) {
+      for (const topic of classifier.topics) ids.add(topic.topic_id);
+    }
+    return ids;
+  }, [activeProject]);
+
   // Seed the form from a pipeline handoff once, keeping only topics that exist in
   // this project's library.
   useEffect(() => {
@@ -192,11 +203,26 @@ export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-h-60 overflow-y-auto">
-                {unselectedTopics.map((o) => (
-                  <DropdownMenuItem key={o.value} onSelect={() => toggle(setTopics)(o.value)}>
-                    {o.label}
-                  </DropdownMenuItem>
-                ))}
+                {unselectedTopics.map((o) => {
+                  const isProject = projectSubtopicIds.has(o.value);
+                  return (
+                    <DropdownMenuItem
+                      key={o.value}
+                      onSelect={() => toggle(setTopics)(o.value)}
+                      className={cn(
+                        "flex items-center justify-between gap-3",
+                        isProject && "bg-acteu-red/10",
+                      )}
+                    >
+                      {o.label}
+                      {isProject && (
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-acteu-red">
+                          Project
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
