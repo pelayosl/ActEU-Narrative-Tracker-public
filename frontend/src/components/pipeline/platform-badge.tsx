@@ -4,8 +4,8 @@ import type { Platform } from "@/types/api";
 // Outlined badge: colour on the border and text, transparent fill.
 const PLATFORM_STYLES: Record<Platform | string, string> = {
   twitter: "border-ink text-ink",
-  telegram: "border-blue-500 text-blue-500",
-  media: "border-green-600 text-green-600",
+  telegram: "border-blue-700 text-blue-700",
+  media: "border-green-800 text-green-800",
 };
 
 export function PlatformBadge({ platform }: { platform: string }) {
