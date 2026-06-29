@@ -38,9 +38,9 @@ export default function PipelinePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <Stepper currentStep={currentStep} />
-        <Button variant="outline" onClick={goToVisualiser}>
+        <Button variant="outline" onClick={goToVisualiser} className="shrink-0">
           <BarChart3 className="mr-1.5 h-4 w-4" />
           Visualise Data
         </Button>
