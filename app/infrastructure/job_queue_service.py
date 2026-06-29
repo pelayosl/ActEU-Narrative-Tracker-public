@@ -5,6 +5,7 @@ from celery import Celery
 from celery.result import AsyncResult
 from redis.asyncio import Redis
 
+from app.infrastructure.timing import log_timing
 from app.schemas.jobs import JobStatus
 
 _TERMINAL_STATES = {"SUCCESS", "FAILURE", "REVOKED"}
@@ -35,6 +36,9 @@ class JobQueueService:
         :returns: The dispatched task's id.
         """
         async_result = self._celery.send_task(task_name, kwargs=kwargs)
+        # Timing : record the dispatch instant so the parser can pair it with
+        # the worker's task-start time (by job_id) and derive queue-wait latency.
+        log_timing(task_name, event="dispatch", job_id=async_result.id)
         return async_result.id
 
     async def get_status(self, job_id: str) -> JobStatus:

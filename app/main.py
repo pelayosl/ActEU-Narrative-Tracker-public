@@ -1,8 +1,11 @@
 import logging
+import time
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
+
+from app.infrastructure.timing import log_timing
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -17,6 +20,26 @@ from app.api import (
 )
 
 app = FastAPI(title="ActEU Narrative Tracker", redirect_slashes=False)
+
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    """Timing: record wall-clock response time per
+    user-facing request at the API-Gateway layer. Uses the matched route template
+    (e.g. ``/projects/{project_id}/topics``) as the operation name so records with
+    different path parameters aggregate together."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    route = request.scope.get("route")
+    op_path = getattr(route, "path", request.url.path)
+    log_timing(
+        f"{request.method} {op_path}",
+        event="request",
+        status=response.status_code,
+        dur_ms=duration_ms,
+    )
+    return response
 
 
 @app.exception_handler(PyMongoError)

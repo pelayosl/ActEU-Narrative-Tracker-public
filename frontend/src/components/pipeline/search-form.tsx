@@ -287,6 +287,7 @@ export function SearchForm({
           step={0.05}
           value={confidence}
           onChange={(e) => setConfidence(Number(e.target.value))}
+          aria-valuetext={confidence > 0 ? `${Math.round(confidence * 100)}%` : "No minimum"}
           className="w-full accent-acteu-red"
         />
         <p className="mt-1 text-xs text-muted-foreground">

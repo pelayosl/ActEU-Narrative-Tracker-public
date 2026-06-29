@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     DOCUMENT_SEARCH_LIMIT: int = 5000
     CLASSIFIER_DIR: str = "/app/classifiers"
     EMBEDDING_CACHE_DIR: str = "/app/embedding_cache"
+    TIMING_LOG_PATH: str = "timings.log"
     OLLAMA_URL: str = "university-api" # Stored in .env
     OLLAMA_MODEL: str = "gemma4:26b"
     HF_TOKEN: SecretStr = SecretStr("changeme")

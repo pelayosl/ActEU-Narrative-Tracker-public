@@ -1,3 +1,10 @@
+# Performance-timing logs
+timings.log
+*timings*.log
+
+# Locust load-test results
+perf/results/
+
 # Python
 __pycache__/
 *.py[cod]
