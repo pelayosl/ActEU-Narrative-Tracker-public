@@ -5,7 +5,7 @@ Two complementary measurements:
 | What | How | Where it lives |
 |---|---|---|
 | **Timing** | Server-side instrumentation logs duration per request/job | `app/infrastructure/timing.py`, parsed by `scripts/parse_timings.py` |
-| **Load testing** | Locust generates concurrent traffic; correlate with timing logs + resource use | `perf/locustfile.py` |
+| **Load testing** | Locust generates concurrent traffic; correlate with timing logs + resource use | `tests/perf/locustfile.py` |
 
 The Locust harness targets the **FastAPI gateway directly** so the measurement isolates
 contention between the API, the Celery worker and MongoDB — not the Nginx/Next.js proxy.
@@ -59,14 +59,14 @@ read-only `SearchVisualisationUser` always works.
 
 ```bash
 export LOCUST_USERNAME=loadtest LOCUST_PASSWORD=secret
-locust -f perf/locustfile.py --host http://localhost:8000 SearchVisualisationUser
+locust -f tests/perf/locustfile.py --host http://localhost:8000 SearchVisualisationUser
 ```
 
 Open http://localhost:8089 for the live UI, or run headless:
 
 ```bash
-locust -f perf/locustfile.py --host http://localhost:8000 SearchVisualisationUser \
-    --headless -u 25 -r 5 -t 5m --csv perf/results/read_25u
+locust -f tests/perf/locustfile.py --host http://localhost:8000 SearchVisualisationUser \
+    --headless -u 25 -r 5 -t 5m --csv tests/perf/results/read_25u
 ```
 
 `-u` = peak users, `-r` = spawn rate/s, `-t` = duration. `--csv` writes
@@ -77,8 +77,8 @@ locust -f perf/locustfile.py --host http://localhost:8000 SearchVisualisationUse
 ```bash
 export LOCUST_USERNAME=loadtest LOCUST_PASSWORD=secret
 export LOCUST_PROJECT_ID=<uuid> LOCUST_CLASSIFIER_ID=<uuid>
-locust -f perf/locustfile.py --host http://localhost:8000 \
-    --headless -u 30 -r 5 -t 5m --csv perf/results/mixed_30u
+locust -f tests/perf/locustfile.py --host http://localhost:8000 \
+    --headless -u 30 -r 5 -t 5m --csv tests/perf/results/mixed_30u
 ```
 
 Concurrent Phase 2 submissions on the same project return `409 LabellingLocked`; the
@@ -112,4 +112,4 @@ Locust reports **client-side** latency. During each run also capture:
 * **Celery queue depth** — `redis-cli LLEN celery` sampled over time shows the queue
   backing up under pipeline load.
 
-Results CSVs go in `perf/results/` (gitignored).
+Results CSVs go in `tests/perf/results/` (gitignored).

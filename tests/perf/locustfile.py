@@ -10,7 +10,7 @@ that mirror the two operation groups of the timing study:
   and the per-project Redis labelling mutex. A ``409`` mutex rejection is treated as a
   **successful graceful degradation**, not a failure.
 
-Configuration is entirely via environment variables (see ``perf/README.md``):
+Configuration is entirely via environment variables (see ``tests/perf/README.md``):
 
     LOCUST_USERNAME / LOCUST_PASSWORD   credentials used to obtain a JWT (required)
     LOCUST_PROJECT_ID                   project scope for the pipeline user (optional)
@@ -22,11 +22,11 @@ Configuration is entirely via environment variables (see ``perf/README.md``):
 read group always works out of the box.
 
 Run (read group only):
-    locust -f perf/locustfile.py --host https://<host> SearchVisualisationUser
+    locust -f tests/perf/locustfile.py --host https://<host> SearchVisualisationUser
 
 Run (both groups, headless ramp):
-    locust -f perf/locustfile.py --host https://<host> \
-        --headless -u 25 -r 5 -t 5m --csv perf/results/run1
+    locust -f tests/perf/locustfile.py --host https://<host> \
+        --headless -u 25 -r 5 -t 5m --csv tests/perf/results/run1
 """
 
 import os
