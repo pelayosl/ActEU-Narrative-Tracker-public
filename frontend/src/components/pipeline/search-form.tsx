@@ -138,6 +138,17 @@ export function SearchForm({
 
   const unselectedSubtopics = subtopicOptions.filter((o) => !subtopics.includes(o.value));
 
+  // Project-specific subtopics are exactly the topic_ids embedded in this project's
+  // classifiers (db-native subtopics and core topics are never there). Used to tint
+  // them differently in the picker.
+  const projectSubtopicIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const classifier of activeProject?.classifiers ?? []) {
+      for (const topic of classifier.topics) ids.add(topic.topic_id);
+    }
+    return ids;
+  }, [activeProject]);
+
   // ISO yyyy-mm-dd strings compare lexicographically, so a plain string compare is correct here.
   const dateInvalid = Boolean(dateFrom) && Boolean(dateTo) && dateFrom > dateTo;
 
@@ -263,11 +274,26 @@ export function SearchForm({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="max-h-60 overflow-y-auto">
-                  {unselectedSubtopics.map((o) => (
-                    <DropdownMenuItem key={o.value} onSelect={() => toggle(setSubtopics)(o.value)}>
-                      {o.label}
-                    </DropdownMenuItem>
-                  ))}
+                  {unselectedSubtopics.map((o) => {
+                    const isProject = projectSubtopicIds.has(o.value);
+                    return (
+                      <DropdownMenuItem
+                        key={o.value}
+                        onSelect={() => toggle(setSubtopics)(o.value)}
+                        className={cn(
+                          "flex items-center justify-between gap-3",
+                          isProject && "bg-acteu-red/10",
+                        )}
+                      >
+                        {o.label}
+                        {isProject && (
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-acteu-red">
+                            Project
+                          </span>
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
             )
