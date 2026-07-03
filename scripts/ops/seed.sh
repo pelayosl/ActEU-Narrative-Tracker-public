@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time dataset load for a fresh deployment.
 #
-# Runs scripts/load_mongodb.py INSIDE the running `api` container, which reads
+# Runs scripts/data/load_mongodb.py INSIDE the running `api` container, which reads
 # the transformed ndjson from DATA_DIR (mounted at /data/db_import) and bulk-
 # loads MongoDB. It also seeds the core topics, the bootstrap admin user and
 # the starter project.
@@ -10,7 +10,7 @@
 # this on a fresh deployment or when you deliberately want to reset the data.
 #
 # Usage (from the project root on the host, with the stack already up):
-#   ./scripts/seed.sh
+#   ./scripts/ops/seed.sh
 
 set -euo pipefail
 
@@ -23,5 +23,5 @@ case "${reply}" in
     *) echo "Aborted."; exit 1 ;;
 esac
 
-docker compose -f "${COMPOSE_FILE}" exec api python scripts/load_mongodb.py
+docker compose -f "${COMPOSE_FILE}" exec api python scripts/data/load_mongodb.py
 echo "Done. Dataset loaded into MongoDB (persisted in the mongo_data volume)."

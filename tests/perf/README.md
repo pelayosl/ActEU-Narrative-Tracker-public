@@ -4,7 +4,7 @@ Two complementary measurements:
 
 | What | How | Where it lives |
 |---|---|---|
-| **Timing** | Server-side instrumentation logs duration per request/job | `app/infrastructure/timing.py`, parsed by `scripts/parse_timings.py` |
+| **Timing** | Server-side instrumentation logs duration per request/job | `app/infrastructure/timing.py`, parsed by `scripts/utils/parse_timings.py` |
 | **Load testing** | Locust generates concurrent traffic; correlate with timing logs + resource use | `tests/perf/locustfile.py` |
 
 The Locust harness targets the **FastAPI gateway directly** so the measurement isolates
@@ -105,7 +105,7 @@ Plot response time and failure rate against concurrency — that curve is the
 
 Locust reports **client-side** latency. During each run also capture:
 
-* **Server-side timing** — `python scripts/parse_timings.py "timings*.log"` after the
+* **Server-side timing** — `python scripts/utils/parse_timings.py "timings*.log"` after the
   run. Compare per-operation p95 against Locust's; rising **queue wait** vs flat
   **execution time** shows the bottleneck is contention, not the work itself.
 * **Resources** — `docker stats` (or cAdvisor) for per-container CPU/RAM during the run.

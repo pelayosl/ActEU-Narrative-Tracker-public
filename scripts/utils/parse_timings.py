@@ -11,8 +11,8 @@ prints count / mean / p50 / p95 / max for:
                            records by ``job_id`` (worker start_ts − dispatch ts).
 
 Usage:
-    python scripts/parse_timings.py timings.log
-    python scripts/parse_timings.py "logs/*timings*.log"
+    python scripts/utils/parse_timings.py timings.log
+    python scripts/utils/parse_timings.py "logs/*timings*.log"
 """
 
 import glob

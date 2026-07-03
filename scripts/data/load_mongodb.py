@@ -19,7 +19,7 @@ Directory structure expected:
         └── fi.ndjson
 
 Usage:
-    python load_mongodb.py
+    python scripts/data/load_mongodb.py
 """
 
 import json
@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure project root is on sys.path when running this script directly
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from pymongo import MongoClient
@@ -60,9 +60,7 @@ load_env_file(ENV_PATH)
 # ── Configuration ─────────────────────────────────────────────────────────────
 MONGO_URI = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 DB_NAME = os.getenv("MONGODB_DB", "acteu_dev")
-DATA_DIR = Path(
-    os.getenv("DATA_DIR", "C:\\Users\\pelay\\Documents\\EII\\4º Software\\TFG\\Datasets\\db")
-)
+DATA_DIR = Path(os.getenv("DATA_DIR", str(PROJECT_ROOT / "db")))
 BATCH_SIZE = 500  # documents per bulk insert
 # ──────────────────────────────────────────────────────────────────────────────
 

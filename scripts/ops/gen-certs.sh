@@ -2,7 +2,7 @@
 # Generate the internal CA and the IP-SAN server certificate for nginx.
 #
 # Run once on the deployment host (or anywhere with openssl):
-#   ./scripts/gen-certs.sh
+#   ./scripts/ops/gen-certs.sh
 #
 # Outputs into ./certs (gitignored):
 #   ca.key      - CA private key  (KEEP SECRET, keep offline after issuing)

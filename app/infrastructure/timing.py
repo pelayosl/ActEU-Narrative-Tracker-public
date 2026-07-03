@@ -2,7 +2,7 @@
 
 Emits one structured single-line record per measured operation to a dedicated log
 file (``settings.TIMING_LOG_PATH``), kept separate from the application logs so it can
-be parsed without noise (see ``scripts/parse_timings.py``).
+be parsed without noise (see ``scripts/utils/parse_timings.py``).
 
 Two producers write here:
 

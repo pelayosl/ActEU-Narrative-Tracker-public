@@ -11,7 +11,7 @@ Idempotent: only documents whose `published_time` is currently a string are touc
 Documents with a null/missing/already-Date `published_time` are left untouched.
 
 Usage:
-    python scripts/migrate_published_time.py
+    python scripts/data/migrate_published_time.py
 """
 
 import os
