@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { api, isDatabaseUnavailable, DB_UNAVAILABLE_MESSAGE } from "@/lib/api-client";
 import type { UserRole } from "@/types/api";
@@ -111,9 +112,8 @@ export function RegisterDialog({
           </div>
           <div>
             <Label htmlFor="reg-password">Password</Label>
-            <Input
+            <PasswordInput
               id="reg-password"
-              type="password"
               value={form.password}
               onChange={(e) => update("password", e.target.value)}
               required
