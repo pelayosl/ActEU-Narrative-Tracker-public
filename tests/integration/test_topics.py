@@ -79,7 +79,19 @@ class TestReconcile:
         assert res.json() == {"job_id": FAKE_JOB_ID}
 
     async def test_unknown_project_404(self, auth_client):
+        # Otherwise-valid body (two topics) so the 404 is provoked by the missing project alone.
         res = await auth_client.post(
-            "/topics/reconcile", json={"project_id": "ghost", "topics": []}
+            "/topics/reconcile",
+            json={"project_id": "ghost", "topics": [topic("t1", "A"), topic("t2", "B")]},
         )
         assert res.status_code == 404
+
+    async def test_fewer_than_two_topics_returns_422(self, auth_client, db, current_user):
+        # Reconciliation needs at least two topics to reconcile among (backend guard).
+        await insert_project(db, project_id="p-r2", owner_id=current_user.user_id)
+
+        res = await auth_client.post(
+            "/topics/reconcile",
+            json={"project_id": "p-r2", "topics": [topic("t1", "A")]},
+        )
+        assert res.status_code == 422

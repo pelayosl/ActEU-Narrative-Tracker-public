@@ -76,18 +76,29 @@ class TestTrain:
     async def test_other_owner_403(self, auth_client, db):
         await insert_project(db, project_id="p-tr2", owner_id="another-user")
 
+        # Otherwise-valid body (one topic) so the 403 is provoked by ownership alone.
         res = await auth_client.post(
             "/classification/train",
-            json={"project_id": "p-tr2", "name": "Clf", "topics": []},
+            json={"project_id": "p-tr2", "name": "Clf", "topics": [topic("t1", "A")]},
         )
         assert res.status_code == 403
 
     async def test_unknown_project_404(self, auth_client):
         res = await auth_client.post(
             "/classification/train",
-            json={"project_id": "ghost", "name": "Clf", "topics": []},
+            json={"project_id": "ghost", "name": "Clf", "topics": [topic("t1", "A")]},
         )
         assert res.status_code == 404
+
+    async def test_empty_topics_returns_422(self, auth_client, db, current_user):
+        # Alt 5.1: training requires at least one topic (backend guard).
+        await insert_project(db, project_id="p-tr3", owner_id=current_user.user_id)
+
+        res = await auth_client.post(
+            "/classification/train",
+            json={"project_id": "p-tr3", "name": "Clf", "topics": []},
+        )
+        assert res.status_code == 422
 
 
 # ---------------------------------------------------------------------------

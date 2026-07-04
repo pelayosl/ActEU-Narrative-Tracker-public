@@ -114,6 +114,16 @@ class TestRegister:
 
         assert res.status_code == 409
 
+    async def test_missing_mandatory_field_returns_422(self, client, db):
+        # Alt 9.1: a mandatory field missing -> Pydantic validation rejects the form.
+        await insert_user(db, username="boss", password="pw", role="admin", user_id="admin-1")
+        headers = bearer_for("admin-1", "boss", "admin")
+        form = {k: v for k, v in REG_FORM.items() if k != "username"}
+
+        res = await client.post("/auth/register", json=form, headers=headers)
+
+        assert res.status_code == 422
+
 
 # ---------------------------------------------------------------------------
 # Cross-cutting auth middleware

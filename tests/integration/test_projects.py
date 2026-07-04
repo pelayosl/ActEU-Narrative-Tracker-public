@@ -60,6 +60,14 @@ class TestCreateAndList:
         ids = {p["project_id"] for p in res.json()}
         assert ids == {"p-own"}
 
+    async def test_empty_name_returns_422(self, auth_client):
+        # Alt 10.1: a project name is mandatory (backend guard, empty and whitespace-only).
+        res = await auth_client.post("/projects?name=")
+        assert res.status_code == 422
+
+        res = await auth_client.post("/projects?name=%20%20")
+        assert res.status_code == 422
+
 
 # ---------------------------------------------------------------------------
 # GET /projects/{id}

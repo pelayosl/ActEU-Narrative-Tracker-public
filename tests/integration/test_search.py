@@ -60,6 +60,14 @@ class TestSearch:
         res = await auth_client.post("/search/", json={"topics": "immigration"})
         assert res.status_code == 422
 
+    async def test_confidence_threshold_boundaries_accepted(self, auth_client):
+        # Boundary values of the [0, 1] confidence threshold are valid inputs.
+        for threshold in (0.0, 1.0):
+            res = await auth_client.post(
+                "/search/", json={"keywords": [], "topics": [], "confidence_threshold": threshold}
+            )
+            assert res.status_code == 200
+
     async def test_subtopics_with_unknown_project_returns_404(self, auth_client):
         res = await auth_client.post(
             "/search/?project_id=missing", json={"subtopics": ["s-1"]}
