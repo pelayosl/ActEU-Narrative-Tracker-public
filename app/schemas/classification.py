@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.search import SearchQuery
 from app.schemas.topic import Topic
@@ -9,7 +9,8 @@ from app.schemas.topic import Topic
 class TrainClassifierRequest(BaseModel):
     """Request body for training a classifier on selected topics within a project."""
 
-    topics: list[Topic]
+    # At least one topic is required
+    topics: list[Topic] = Field(min_length=1)
     project_id: str
     name: str
 

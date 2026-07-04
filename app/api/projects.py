@@ -16,6 +16,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 P_NOT_FOUND="Project not found"
 ACCESS_DENIED="Access denied"
 CLASSIFIER_NOT_FOUND="Classifier not found"
+NAME_REQUIRED="Project name is required"
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_project(
@@ -25,11 +26,18 @@ async def create_project(
 ) -> Project:
     """Create a new project owned by the authenticated user.
 
-    :param name: The project name.
+    :param name: The project name (must not be empty or whitespace-only).
     :param service: The injected project service.
     :param current_user: The authenticated user, who becomes the owner.
     :returns: The created :class:`Project`.
+    :raises HTTPException: 422 if the name is empty or whitespace-only.
     """
+    # Backend guard mirroring the frontend rule, so an empty name is rejected even if
+    # the client-side validation is bypassed.
+    if not name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=NAME_REQUIRED
+        )
     return await service.create_project(current_user.user_id, name)
 
 

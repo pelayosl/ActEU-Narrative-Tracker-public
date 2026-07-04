@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # Reserved label for the BERTopic outlier cluster (-1). Used internally to train
@@ -38,8 +38,10 @@ class ReconciliationRequest(BaseModel):
 
     project_id: str
     # Topics the LLM should reconcile (merge among). When the user reconciles a
-    # selection, this is just that subset.
-    topics: list[Topic]
+    # selection, this is just that subset. At least two are required — a single topic
+    # has nothing to reconcile against (mirrors the frontend rule); enforced here so
+    # the backend rejects a degenerate request with 422 even if the frontend is bypassed.
+    topics: list[Topic] = Field(min_length=2)
     # Topics excluded from reconciliation that must survive unchanged in the final
     # reconciled list (the unselected topics). Empty when reconciling everything.
     passthrough_topics: list[Topic] = []
