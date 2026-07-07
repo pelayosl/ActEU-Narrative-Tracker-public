@@ -1,3 +1,8 @@
+/**
+ * Dialog for naming a topic merged from several selected topics.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -13,15 +18,27 @@ import {
 } from "@/components/ui/dialog";
 import type { Topic } from "@/types/api";
 
+/** Props for {@link MergeDialog}. */
 interface MergeDialogProps {
+  /** Whether the dialog is visible. */
   open: boolean;
+  /** Callback to open/close the dialog. */
   onOpenChange: (open: boolean) => void;
-  topics: Topic[]; // the selected topics being merged
+  /** The selected topics being merged. */
+  topics: Topic[];
+  /** Confirm the merge with the chosen name and description. */
   onConfirm: (name: string, description: string) => void;
 }
 
-// Frontend-only merge (no backend call). Pre-fills a combined name and
-// description from the selected topics; both fields must be non-empty to confirm.
+/**
+ * Collect a name and description for a merged topic (a frontend-only operation,
+ * no backend call). The fields are pre-filled from the selected topics — the
+ * names joined with " + " and the first topic's description — and re-seeded each
+ * time the dialog reopens with a new selection. Both fields must be non-empty to
+ * confirm.
+ *
+ * @param props - See {@link MergeDialogProps}.
+ */
 export function MergeDialog({ open, onOpenChange, topics, onConfirm }: MergeDialogProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

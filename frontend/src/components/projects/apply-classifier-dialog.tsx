@@ -1,3 +1,8 @@
+/**
+ * Dialog that applies a trained classifier to a fresh query (Phase-2 labelling).
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,15 +15,27 @@ import { api, errorMessage } from "@/lib/api-client";
 import { useJob } from "@/lib/use-job";
 import type { ClassifierMetadata, LabellingResult, Project, SearchQuery } from "@/types/api";
 
+/** Props for {@link ApplyClassifierDialog}. */
 interface ApplyClassifierDialogProps {
+  /** The project owning the classifier. */
   project: Project;
+  /** The classifier to run over the new query. */
   classifier: ClassifierMetadata;
+  /** Whether the dialog is visible. */
   open: boolean;
+  /** Callback to open/close the dialog. */
   onOpenChange: (open: boolean) => void;
 }
 
-// Phase 2 labelling from the Project Library: a compact query form runs the trained
-// classifier over a new query, then shows a labelling summary.
+/**
+ * Run Phase-2 labelling from the Project Library.
+ *
+ * Shows a compact {@link SearchForm}; on submit it starts an async labelling job
+ * for the classifier over the chosen query, streams progress via {@link useJob},
+ * and renders a {@link LabellingSummary} once the job succeeds.
+ *
+ * @param props - See {@link ApplyClassifierDialogProps}.
+ */
 export function ApplyClassifierDialog({ project, classifier, open, onOpenChange }: ApplyClassifierDialogProps) {
   const { data: session } = useSession();
   const [jobId, setJobId] = useState<string | null>(null);

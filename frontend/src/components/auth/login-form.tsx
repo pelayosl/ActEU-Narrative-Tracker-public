@@ -1,3 +1,8 @@
+/**
+ * Credential login form for the `/login` page.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -9,6 +14,13 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { DB_UNAVAILABLE_ERROR, DB_UNAVAILABLE_MESSAGE } from "@/lib/api-client";
 
+/**
+ * Username/password form that signs in via NextAuth credentials.
+ *
+ * On success it navigates to the pipeline; on failure it shows a generic
+ * "Invalid credentials" message (never revealing which field was wrong), except
+ * for a backend 503 which is surfaced as the database-unavailable message.
+ */
 export function LoginForm() {
   const router = useRouter();
   const [username, setUsername] = useState("");

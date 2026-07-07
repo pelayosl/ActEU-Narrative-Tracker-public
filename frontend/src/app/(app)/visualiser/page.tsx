@@ -1,3 +1,8 @@
+/**
+ * `/visualiser` route: query builder plus the dashboard of topic analytics.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -16,6 +21,13 @@ import { api, errorMessage } from "@/lib/api-client";
 import { useProjectStore } from "@/stores/project-store";
 import type { Dashboard, VisualisationQuery } from "@/types/api";
 
+/**
+ * Render the visualiser: a {@link QueryPanel} whose submissions load a dashboard
+ * (via React Query) that is then charted as topic evolution, language and
+ * platform breakdowns, top entities and representative documents. Topic colours
+ * and labels are fixed at load time so legends stay stable across charts. With
+ * no active project, shows the {@link ProjectSelectorDialog}.
+ */
 export default function VisualiserPage() {
   const { data: session } = useSession();
   const activeProject = useProjectStore((s) => s.activeProject);

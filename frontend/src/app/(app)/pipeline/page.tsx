@@ -1,3 +1,8 @@
+/**
+ * `/pipeline` route: the three-step topic-modelling workflow.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useEffect } from "react";
@@ -13,6 +18,12 @@ import { useProjectStore } from "@/stores/project-store";
 import { buildVisualiserPrefill, useVisualiserStore } from "@/stores/visualiser-store";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Drive the pipeline: hydrate from the active project's pending pipeline on
+ * entry, render the current step (search → topics → label), and offer a jump to
+ * the Visualiser (seeding its prefill from the query and trained classifier).
+ * With no active project, shows the {@link ProjectSelectorDialog} instead.
+ */
 export default function PipelinePage() {
   const router = useRouter();
   const activeProject = useProjectStore((s) => s.activeProject);

@@ -1,3 +1,8 @@
+/**
+ * Primary navigation sidebar with the profile menu docked at the bottom.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import Link from "next/link";
@@ -7,12 +12,18 @@ import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { ProfileMenu } from "./profile-menu";
 
+/** Top-level navigation destinations shown in the sidebar. */
 const items = [
   { href: "/pipeline", label: "Pipeline", icon: LayoutGrid },
   { href: "/projects", label: "Project Library", icon: FolderKanban },
   { href: "/visualiser", label: "Visualiser", icon: BarChart3 },
 ];
 
+/**
+ * Render the navigation links (highlighting the active route), the collapse
+ * control and the {@link ProfileMenu}. Returns `null` when collapsed; in narrow
+ * mode it floats over the content as an overlay instead of taking column space.
+ */
 export function Sidebar() {
   const pathname = usePathname();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);

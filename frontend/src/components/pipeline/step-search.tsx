@@ -1,3 +1,8 @@
+/**
+ * Pipeline Step 1: search documents and launch topic generation.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,11 +18,19 @@ import { usePipelineStore } from "@/stores/pipeline-store";
 import { useProjectStore } from "@/stores/project-store";
 import type { SearchQuery } from "@/types/api";
 
+/** Documents shown per results page. */
 const PAGE_SIZE = 10;
 
-// Windowed page list: always first + last + current ±1, with "…" markers for larger gaps.
-// A gap of exactly one page is filled with the number rather than an ellipsis.
-// `page`/`total` are 1-indexed here. Returns numbers and ellipsis sentinels.
+/**
+ * Build a windowed pagination list: always first + last + current ±1, with
+ * ellipsis markers for larger gaps. A gap of exactly one page is filled with the
+ * number rather than an ellipsis.
+ *
+ * @param page - The current page (1-indexed).
+ * @param total - The total number of pages.
+ * @returns Page numbers interleaved with `"ellipsis-left"`/`"ellipsis-right"`
+ *   sentinels for rendering.
+ */
 function getPageItems(page: number, total: number): (number | "ellipsis-left" | "ellipsis-right")[] {
   const shown = new Set<number>([1, total]);
   for (let i = page - 1; i <= page + 1; i++) {
@@ -40,6 +53,13 @@ function getPageItems(page: number, total: number): (number | "ellipsis-left" | 
   return items;
 }
 
+/**
+ * Search step: run a faceted {@link SearchForm}, browse the paginated results
+ * with a synced preview pane, then dispatch the BERTopic generation job and
+ * advance to the topic-modelling step in its loading state. Core-topic slugs in
+ * results are resolved to display labels, and a floating hint nudges the user
+ * toward the "Generate Topics" action when it sits below the fold.
+ */
 export function StepSearch() {
   const { data: session } = useSession();
   const activeProject = useProjectStore((s) => s.activeProject);

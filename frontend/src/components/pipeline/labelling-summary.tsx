@@ -1,16 +1,31 @@
+/**
+ * Result banner and per-topic breakdown shown after a labelling phase.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import type { LabellingResult } from "@/types/api";
 
+/** Props for {@link LabellingSummary}. */
 interface LabellingSummaryProps {
+  /** Heading for the breakdown table. */
   title: string;
-  bannerLabel: string; // e.g. "labelled from original query"
+  /** Suffix for the total banner, e.g. `"labelled from original query"`. */
+  bannerLabel: string;
+  /** The labelling outcome to summarise. */
   result: LabellingResult;
+  /** Resolve a topic id to its display name (the result is keyed by id). */
   topicName: (topicId: string) => string;
 }
 
-// Green banner with the total plus a per-topic breakdown table. Shown after each
-// labelling phase. topic_summary is keyed by topic_id; names are resolved by the caller.
+/**
+ * Green total banner plus a per-topic breakdown table, sorted by document count
+ * descending. Shown after each labelling phase; topic ids are resolved to names
+ * via the `topicName` callback supplied by the caller.
+ *
+ * @param props - See {@link LabellingSummaryProps}.
+ */
 export function LabellingSummary({ title, bannerLabel, result, topicName }: LabellingSummaryProps) {
   const rows = Object.entries(result.topic_summary).sort((a, b) => b[1] - a[1]);
 

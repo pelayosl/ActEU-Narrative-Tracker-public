@@ -3,6 +3,9 @@
  * Purely ornamental (the hero marks it aria-hidden), so it carries no semantic role.
  * Nodes loosely evoke the ten covered countries; edges suggest narratives spreading
  * across borders. Drawn with currentColor so callers control the tint via text-*.
+ *
+ * @param props - Component props; `className` styles the root `<svg>` (size, colour).
+ * @packageDocumentation
  */
 export function EuropeMotif({ className }: { className?: string }) {
   // Loosely geographic node layout (viewBox 0..200). Not to scale — evocative only.

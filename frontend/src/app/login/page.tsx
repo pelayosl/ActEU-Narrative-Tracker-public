@@ -1,8 +1,20 @@
+/**
+ * `/login` route: renders the credential login form.
+ *
+ * @packageDocumentation
+ */
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 
+/** Query string for the login route; `expired=1` flags a timed-out session. */
 type SearchParams = Promise<{ expired?: string }>;
 
+/**
+ * The login page. Shows a "session expired" notice when redirected here with
+ * `?expired=1` (e.g. by the route proxy after the token lapses), then the form.
+ *
+ * @param props - Route props; `searchParams` is the parsed query string.
+ */
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {
   const { expired } = await searchParams;
   const sessionExpired = expired === "1";

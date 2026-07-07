@@ -1,3 +1,8 @@
+/**
+ * Project library: browse projects and manage their trained classifiers.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -17,10 +22,24 @@ import { api, errorMessage } from "@/lib/api-client";
 import { useProjectStore } from "@/stores/project-store";
 import type { ClassifierMetadata, Project } from "@/types/api";
 
+/**
+ * Format an ISO date string as a short, locale-aware date (e.g. "7 Jul 2026").
+ *
+ * @param iso - An ISO-8601 date string.
+ * @returns The localised short date.
+ */
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+/**
+ * The project library table: expandable rows listing each project's classifiers.
+ *
+ * Lists the current user's projects (via React Query) and, per expanded row, the
+ * project's classifiers with actions to apply (Phase-2 labelling), download the
+ * `.bin` model, or delete. Deleting a project or classifier confirms first and
+ * keeps the active-project store and cached topic facets in sync.
+ */
 export function ProjectList() {
   const { data: session } = useSession();
   const token = session?.accessToken;

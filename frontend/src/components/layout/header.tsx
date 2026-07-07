@@ -1,9 +1,18 @@
+/**
+ * Top bar showing the active project and a sidebar-reveal control.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { PanelLeftOpen } from "lucide-react";
 import { useProjectStore } from "@/stores/project-store";
 import { useUiStore } from "@/stores/ui-store";
 
+/**
+ * App header: renders the active project's name and, when the sidebar is
+ * hidden, a button to reveal it.
+ */
 export function Header() {
   const activeProject = useProjectStore((s) => s.activeProject);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);

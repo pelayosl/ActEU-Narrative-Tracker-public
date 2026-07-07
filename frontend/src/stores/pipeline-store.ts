@@ -1,3 +1,15 @@
+/**
+ * Central store driving the multi-step topic-modelling pipeline.
+ *
+ * Holds every piece of pipeline state — the current step, the search query and
+ * results, the generated and reconciled topic lists, running job ids, the
+ * trained classifier and labelling results — plus the actions that mutate them,
+ * including the frontend-only topic editing (rename, delete, merge, split). It
+ * can be rehydrated from a project's `pending_pipeline` so an interrupted
+ * pipeline resumes at the right step.
+ *
+ * @packageDocumentation
+ */
 import { create } from "zustand";
 import type {
   ClassifierMetadata,
@@ -8,16 +20,26 @@ import type {
   Topic,
 } from "@/types/api";
 
+/** The three top-level pipeline steps. */
 export type PipelineStep = "search" | "topics" | "label";
+/** Sub-states within the "topics" step (generation then reconciliation). */
 export type TopicSubStep = "generating" | "generated" | "reconciling" | "reconciled";
 
-// Generation-era ids a topic resolves to in the backend topic_mapping. A merged
-// topic carries its constituents' ids in origin_topic_ids; a raw one uses its own
-// id. Kept in sync with the backend (llm_client._generation_ids / training task).
+/**
+ * The generation-era ids a topic resolves to in the backend `topic_mapping`.
+ *
+ * A merged topic carries its constituents' ids in `origin_topic_ids`; a raw one
+ * uses its own id. Kept in sync with the backend
+ * (`llm_client._generation_ids` / training task).
+ *
+ * @param topic - The topic to resolve.
+ * @returns The generation ids this topic maps to.
+ */
 function generationIds(topic: Topic): string[] {
   return topic.origin_topic_ids.length > 0 ? topic.origin_topic_ids : [topic.topic_id];
 }
 
+/** Full state and action surface of the pipeline store. */
 interface PipelineState {
   currentStep: PipelineStep;
   topicSubStep: TopicSubStep | null;
@@ -89,8 +111,15 @@ const initial = {
   resumedDocCount: null,
 };
 
-// Count unique doc ids across a topic_mapping (used to show the document count
-// when a pipeline is resumed and the original searchResult is no longer in memory).
+/**
+ * Count unique document ids across a `topic_mapping`.
+ *
+ * Used to show the document count when a pipeline is resumed and the original
+ * `searchResult` is no longer in memory.
+ *
+ * @param topicMapping - Reconciled topic id → document ids.
+ * @returns The number of distinct document ids across all topics.
+ */
 function countMappedDocs(topicMapping: Record<string, string[]>): number {
   const ids = new Set<string>();
   for (const docIds of Object.values(topicMapping)) {
@@ -99,6 +128,7 @@ function countMappedDocs(topicMapping: Record<string, string[]>): number {
   return ids.size;
 }
 
+/** Zustand hook exposing the full pipeline state and its actions. */
 export const usePipelineStore = create<PipelineState>((set) => ({
   ...initial,
   setStep: (step) => set({ currentStep: step }),

@@ -1,15 +1,26 @@
+/**
+ * Progress indicator for the three pipeline steps.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { cn } from "@/lib/utils";
 import type { PipelineStep } from "@/stores/pipeline-store";
 
+/** The ordered pipeline steps and their display labels. */
 const steps: { id: PipelineStep; label: string }[] = [
   { id: "search", label: "Search" },
   { id: "topics", label: "Topic Modelling" },
   { id: "label", label: "Label Dataset" },
 ];
 
-// Indicative only — non-clickable.
+/**
+ * Numbered step indicator that highlights the current and completed steps.
+ * Indicative only — the steps are not clickable.
+ *
+ * @param props - Component props; `currentStep` is the step the pipeline is on.
+ */
 export function Stepper({ currentStep }: { currentStep: PipelineStep }) {
   const currentIdx = steps.findIndex((s) => s.id === currentStep);
   return (

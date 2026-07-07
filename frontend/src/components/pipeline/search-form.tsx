@@ -1,3 +1,8 @@
+/**
+ * Faceted search form driving the pipeline's Search step and label dialogs.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import * as React from "react";
@@ -25,6 +30,13 @@ const PLATFORMS: { label: string; value: Platform }[] = [
   { label: "Online Media", value: "media" },
 ];
 
+/**
+ * A toggleable filter pill.
+ *
+ * @param props.active - Whether the pill's value is selected.
+ * @param props.onClick - Handler toggling the value.
+ * @param props.children - The pill label.
+ */
 function Pill({
   active,
   onClick,
@@ -51,6 +63,14 @@ function Pill({
   );
 }
 
+/**
+ * A labelled group of toggle {@link Pill}s for a multi-select facet.
+ *
+ * @param props.label - The facet's heading.
+ * @param props.options - Selectable `{ label, value }` options.
+ * @param props.selected - Currently selected values.
+ * @param props.onToggle - Toggle a value's selection.
+ */
 function Facet({
   label,
   options,
@@ -76,14 +96,31 @@ function Facet({
   );
 }
 
+/** Props for {@link SearchForm}. */
 export interface SearchFormProps {
+  /** Called with the assembled query when the form is submitted. */
   onSubmit: (query: SearchQuery) => void;
   /** Reduced padding + no heading, for reuse inside Apply Classifier / Label Custom Query dialogs. */
   compact?: boolean;
+  /** Label for the submit button (defaults to "Search"). */
   submitLabel?: string;
+  /** Whether a search/label is in flight (disables submit). */
   loading?: boolean;
 }
 
+/**
+ * Faceted query builder for documents: keywords, date range, languages,
+ * platforms, ActEU core topics, project subtopics and a minimum-confidence
+ * slider.
+ *
+ * Language and topic facets are fetched from the backend and scoped to the
+ * active project (project-classifier subtopics are tinted distinctly). On submit
+ * it assembles a {@link SearchQuery} — splitting comma-separated keywords,
+ * bounding the dates to full days, and sending a null confidence when the slider
+ * is at zero. The `compact` variant is reused inside labelling dialogs.
+ *
+ * @param props - See {@link SearchFormProps}.
+ */
 export function SearchForm({
   onSubmit,
   compact = false,

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "ActEU narrative tracker frontend",
+  "entryPoints": ["src"],
+  "entryPointStrategy": "expand",
+  "out": "../docs/frontend",
+  "tsconfig": "tsconfig.json",
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/test/**",
+    "src/components/ui/**"
+  ],
+  "excludeExternals": true,
+  "excludePrivate": false,
+  "readme": "none",
+  "hideGenerator": true,
+  "githubPages": false,
+  "skipErrorChecking": true,
+  "validation": {
+    "notExported": false,
+    "invalidLink": false,
+    "notDocumented": false
+  }
+}

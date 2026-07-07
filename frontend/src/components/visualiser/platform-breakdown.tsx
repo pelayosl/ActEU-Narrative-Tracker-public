@@ -1,3 +1,8 @@
+/**
+ * Grouped bar chart comparing topic presence across platforms.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useMemo } from "react";
@@ -15,19 +20,29 @@ import {
 import type { TopicPlatformBreakdown } from "@/types/api";
 import type { TopicSeriesMeta } from "./topic-colors";
 
+/** Props for {@link PlatformBreakdown}. */
 interface PlatformBreakdownProps {
+  /** Per-topic platform counts. */
   data: TopicPlatformBreakdown[];
+  /** Topic display metadata (value, label, colour) for legend and bars. */
   topics: TopicSeriesMeta[];
 }
 
+/** Human-readable labels for the platform identifiers. */
 const PLATFORM_LABELS: Record<string, string> = {
   twitter: "Twitter",
   telegram: "Telegram",
   media: "Online Media",
 };
 
-// Grouped horizontal bars: one row per platform, one bar per topic. Counts are
-// pivoted so each row carries a value per topic.
+/**
+ * Grouped horizontal bar chart: one row per platform, one bar per topic.
+ *
+ * The per-topic counts are pivoted so each platform row carries a value per
+ * topic. Shows an empty-state message when no documents matched.
+ *
+ * @param props - See {@link PlatformBreakdownProps}.
+ */
 export function PlatformBreakdown({ data, topics }: PlatformBreakdownProps) {
   const rows = useMemo(() => {
     const byPlatform = new Map<string, Record<string, string | number>>();

@@ -1,7 +1,18 @@
+/**
+ * Animated progress bar for long-running pipeline jobs.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
-// Red progress bar for long-running jobs (BERTopic, reconciliation, training).
-// `progress` is 0-100; `step` is the live status message from the job.
+/**
+ * Shimmering red progress bar for long-running jobs (BERTopic, reconciliation,
+ * training). Shows the live status message and percentage when available.
+ *
+ * @param props - Component props: `progress` (0–100 percentage), `step` (live
+ *   status message from the job, if any) and `fallback` (message shown when no
+ *   `step` has arrived yet).
+ */
 export function JobProgress({
   progress,
   step,

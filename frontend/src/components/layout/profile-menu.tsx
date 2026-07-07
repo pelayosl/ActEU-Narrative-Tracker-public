@@ -1,3 +1,8 @@
+/**
+ * Account dropdown: shows the signed-in user and log-out / register actions.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -13,6 +18,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RegisterDialog } from "@/components/auth/register-dialog";
 
+/**
+ * Dropdown showing the current user's name and role, with a log-out action and,
+ * for admins only, a "Register user" entry that opens the {@link RegisterDialog}.
+ */
 export function ProfileMenu() {
   const { data: session } = useSession();
   const [registerOpen, setRegisterOpen] = useState(false);

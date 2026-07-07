@@ -1,3 +1,8 @@
+/**
+ * Gate shown when no project is active: pick an existing project or create one.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -11,8 +16,16 @@ import { api, errorMessage } from "@/lib/api-client";
 import { useProjectStore } from "@/stores/project-store";
 import { cn } from "@/lib/utils";
 
+/** Whether the selector is choosing an existing project or creating a new one. */
 type Mode = "select" | "create";
 
+/**
+ * Project chooser shown by the Pipeline and Visualiser when no project is active.
+ *
+ * Offers two modes: select an existing project from the user's list, or create a
+ * new one by name. Either action sets the active project in the store, which
+ * dismisses this gate and lets the page render.
+ */
 export function ProjectSelectorDialog() {
   const { data: session } = useSession();
   const token = session?.accessToken;
@@ -141,6 +154,13 @@ export function ProjectSelectorDialog() {
   );
 }
 
+/**
+ * A pill-style toggle button for switching between the selector's two modes.
+ *
+ * @param props.active - Whether this button's mode is currently selected.
+ * @param props.onClick - Handler to activate this mode.
+ * @param props.children - The button label.
+ */
 function ModeButton({ active, onClick, children }: Readonly<{
   active: boolean;
   onClick: () => void;

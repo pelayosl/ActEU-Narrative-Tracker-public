@@ -1,3 +1,8 @@
+/**
+ * Admin-only dialog for registering a new user account.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -16,8 +21,15 @@ import { Label } from "@/components/ui/label";
 import { api, isDatabaseUnavailable, DB_UNAVAILABLE_MESSAGE } from "@/lib/api-client";
 import type { UserRole } from "@/types/api";
 
+/** Usernames may contain only letters, digits and underscores. */
 const USERNAME_RE = /^[A-Za-z0-9_]+$/;
 
+/**
+ * Check a password against the strength policy (mirrors the backend rules).
+ *
+ * @param pw - The candidate password.
+ * @returns An error message if invalid, or `null` if the password is acceptable.
+ */
 function validatePassword(pw: string): string | null {
   if (pw.length < 8) return "Password must be at least 8 characters.";
   if (!/[A-Z]/.test(pw)) return "Password must contain an uppercase letter.";
@@ -25,8 +37,19 @@ function validatePassword(pw: string): string | null {
   return null;
 }
 
+/** Blank registration form state. */
 const EMPTY = { name: "", surname: "", username: "", password: "", role: "user" as UserRole };
 
+/**
+ * Modal form that creates a user via the admin-only register endpoint.
+ *
+ * Validates the username and password client-side before submitting, and maps
+ * backend failures to friendly messages (409 → username taken, 503 → database
+ * unavailable). Requires the current admin's bearer token.
+ *
+ * @param props - Component props: `open` (whether the dialog is visible) and
+ *   `onOpenChange` (callback to open/close the dialog).
+ */
 export function RegisterDialog({
   open,
   onOpenChange,

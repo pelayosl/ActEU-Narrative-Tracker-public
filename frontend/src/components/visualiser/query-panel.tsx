@@ -1,3 +1,8 @@
+/**
+ * Sidebar form that builds and submits the visualisation query.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import * as React from "react";
@@ -26,10 +31,18 @@ const PLATFORMS: { label: string; value: Platform }[] = [
   { label: "Online Media", value: "media" },
 ];
 
-// Topics are capped so the relevant-documents sample can guarantee each topic a slot.
+/** Max topics per query, so the document sample can guarantee each topic a slot. */
 const MAX_TOPICS = 5;
+/** Default relevant-documents sample size. */
 const DEFAULT_SAMPLE_SIZE = 30;
 
+/**
+ * A toggleable filter pill (used for languages and platforms).
+ *
+ * @param props.active - Whether the pill's value is currently selected.
+ * @param props.onClick - Handler toggling the value.
+ * @param props.children - The pill label.
+ */
 function Pill({
   active,
   onClick,
@@ -56,13 +69,28 @@ function Pill({
   );
 }
 
+/** Props for {@link QueryPanel}. */
 export interface QueryPanelProps {
-  // Called on "Load Visualisation". topicLabels maps each submitted topic value to
-  // its display name so the charts can render readable legends.
+  /**
+   * Called on "Load Visualisation". `topicLabels` maps each submitted topic
+   * value to its display name so the charts can render readable legends.
+   */
   onLoad: (query: VisualisationQuery, topicLabels: Record<string, string>) => void;
+  /** Whether a load is in flight (disables the submit button). */
   loading?: boolean;
 }
 
+/**
+ * Sticky sidebar collecting the visualisation parameters — topics (up to
+ * {@link MAX_TOPICS}), date range, languages, platforms and sample size.
+ *
+ * Topic and language facets are fetched per active project; project-classifier
+ * subtopics are tinted distinctly. The panel seeds itself once from any pipeline
+ * handoff prefill, validates the inputs, and calls `onLoad` with the assembled
+ * {@link VisualisationQuery} and a topic-value → label map.
+ *
+ * @param props - See {@link QueryPanelProps}.
+ */
 export function QueryPanel({ onLoad, loading = false }: QueryPanelProps) {
   const { data: session } = useSession();
   const activeProject = useProjectStore((s) => s.activeProject);

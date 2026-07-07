@@ -1,11 +1,21 @@
+/**
+ * NextAuth configuration for credential-based login against the FastAPI backend.
+ *
+ * Server-side only. The credentials provider posts the username/password to the
+ * backend's `/auth/login`, decodes the returned JWT for its claims, and stashes
+ * the raw bearer token on the NextAuth session so API calls can authenticate.
+ *
+ * @packageDocumentation
+ */
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { DB_UNAVAILABLE_ERROR } from "@/lib/api-client";
 import type { UserRole } from "@/types/api";
 
-// Server-side only — talks to FastAPI directly (no CORS / no proxy).
+/** Base URL of the FastAPI backend; server-side only (no CORS / no proxy). */
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
+/** The subset of backend JWT claims the frontend reads. */
 interface JwtClaims {
   sub: string;
   username: string;
@@ -13,12 +23,25 @@ interface JwtClaims {
   exp: number;
 }
 
-/** Read JWT claims without verifying the signature — the backend re-verifies on every call. */
+/**
+ * Read JWT claims without verifying the signature.
+ *
+ * Only the payload segment is base64url-decoded; the backend re-verifies the
+ * signature on every call, so client-side verification would be redundant.
+ *
+ * @param token - A compact JWS (`header.payload.signature`).
+ * @returns The decoded claims from the token's payload.
+ */
 function decodeJwtClaims(token: string): JwtClaims {
   const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
   return JSON.parse(Buffer.from(part, "base64").toString("utf8")) as JwtClaims;
 }
 
+/**
+ * NextAuth options: a JWT session (expiring in step with the backend token), a
+ * `/login` sign-in page, the credentials provider, and callbacks that copy the
+ * backend token and user fields onto the JWT and session.
+ */
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",

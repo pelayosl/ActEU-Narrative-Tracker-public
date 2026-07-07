@@ -1,3 +1,8 @@
+/**
+ * Ranked list of the most central entities for a chosen topic.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -5,15 +10,27 @@ import { Network } from "lucide-react";
 import type { TopicEntities } from "@/types/api";
 import type { TopicSeriesMeta } from "./topic-colors";
 
+/** Props for {@link TopEntities}. */
 interface TopEntitiesProps {
+  /** Per-topic entity rankings. */
   data: TopicEntities[];
+  /** Topic display metadata (value, label, colour) for the topic selector. */
   topics: TopicSeriesMeta[];
 }
 
+/** Maximum number of entities listed for the selected topic. */
 const MAX_ENTITIES = 10;
 
-// Top entities per topic, ranked by PageRank (shown as "relevance"). The user picks
-// which topic/subtopic to inspect from a dropdown inside the card.
+/**
+ * Card listing a topic's top entities, ranked by PageRank (shown as "relevance").
+ *
+ * The user picks which topic/subtopic to inspect from an in-card dropdown (only
+ * topics that actually have entities are offered), and the selection is kept
+ * valid across dashboard reloads. Each entity shows a relevance bar scaled to the
+ * top-ranked entity of the selected topic.
+ *
+ * @param props - See {@link TopEntitiesProps}.
+ */
 export function TopEntities({ data, topics }: TopEntitiesProps) {
   // Only offer topics that actually have an entities entry.
   const options = useMemo(

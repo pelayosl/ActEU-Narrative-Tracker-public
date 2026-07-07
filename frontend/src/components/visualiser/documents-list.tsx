@@ -1,3 +1,8 @@
+/**
+ * Topic-grouped list of representative sampled documents.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useMemo } from "react";
@@ -6,14 +11,25 @@ import { PlatformBadge } from "@/components/pipeline/platform-badge";
 import type { DocumentPreview } from "@/types/api";
 import type { TopicSeriesMeta } from "./topic-colors";
 
+/** Props for {@link DocumentsList}. */
 interface DocumentsListProps {
+  /** The sampled relevant documents across all query topics. */
   data: DocumentPreview[];
+  /** Topic display metadata (value, label, colour) for group headers. */
   topics: TopicSeriesMeta[];
 }
 
-// Orders a topic's documents by platform: platforms are grouped together (ordered by
-// their most relevant document) and ranked by relevance within each platform — so the
-// same-platform documents are contiguous while the most relevant ones still lead.
+/**
+ * Order a topic's documents by platform.
+ *
+ * Documents are grouped by platform (each group ordered by relevance), and the
+ * groups themselves are ordered by their most relevant document — so
+ * same-platform documents stay contiguous while the most relevant ones still
+ * lead.
+ *
+ * @param docs - The documents for a single topic.
+ * @returns The documents flattened into platform-contiguous, relevance order.
+ */
 function orderByPlatform(docs: DocumentPreview[]): DocumentPreview[] {
   const byPlatform = new Map<string, DocumentPreview[]>();
   for (const doc of docs) {
@@ -29,10 +45,17 @@ function orderByPlatform(docs: DocumentPreview[]): DocumentPreview[] {
   return groups.flat();
 }
 
-// The relevant documents are a document-count-weighted stratified sample across the
-// query topics (computed server-side, with platforms interleaved per topic). They are
-// grouped here by topic and, within each topic, ordered by platform so each platform's
-// examples sit together. The same document may appear under more than one topic.
+/**
+ * List representative documents grouped by topic.
+ *
+ * The relevant documents are a document-count-weighted stratified sample across
+ * the query topics (computed server-side). They are grouped here by topic —
+ * following the query's topic order — and, within each topic, ordered by platform
+ * so each platform's examples sit together. The same document may appear under
+ * more than one topic; topics absent from the legend metadata are appended last.
+ *
+ * @param props - See {@link DocumentsListProps}.
+ */
 export function DocumentsList({ data, topics }: DocumentsListProps) {
   // Group documents by topic, following the query's topic order; within a topic the
   // documents are ordered by platform. Topics with no matching documents (and any

@@ -1,3 +1,8 @@
+/**
+ * Pipeline Step 3: train a classifier and label documents with it.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,6 +23,17 @@ import { useProjectStore } from "@/stores/project-store";
 import { buildVisualiserPrefill, useVisualiserStore } from "@/stores/visualiser-store";
 import type { ClassifierMetadata, LabellingResult, SearchQuery, Topic } from "@/types/api";
 
+/**
+ * Final pipeline step: train a FastText classifier on the (reconciled or raw)
+ * topics, then label documents in two phases.
+ *
+ * Phase 1 synchronously labels the retrieved documents; Phase 2 (unlocked after
+ * Phase 1) runs the classifier over an optional custom {@link SearchForm} query
+ * as an async job. Training and Phase-2 jobs stream progress via {@link useJob},
+ * and each phase shows a {@link LabellingSummary}. On completion it seeds the
+ * Visualiser prefill and offers a jump there; exiting returns to the search step
+ * while the pending pipeline remains resumable until Phase 1 has run.
+ */
 export function StepLabelDataset() {
   const router = useRouter();
   const { data: session } = useSession();

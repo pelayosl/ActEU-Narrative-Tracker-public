@@ -1,3 +1,8 @@
+/**
+ * Editable topic card used in the topic-modelling step.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useState } from "react";
@@ -13,17 +18,36 @@ import {
 } from "@/components/ui/dialog";
 import type { Topic } from "@/types/api";
 
+/** Props for {@link TopicCard}. */
 interface TopicCardProps {
+  /** The topic to display and edit. */
   topic: Topic;
+  /** 1-based position shown beside the card. */
   index: number;
+  /** Whether this is a reconciled topic (hides the merge checkbox). */
   reconciled: boolean;
+  /** Whether the card's selection checkbox is checked. */
   selected?: boolean;
+  /** Toggle this topic's selection (for merging raw topics). */
   onToggleSelect?: () => void;
+  /** For reconciled topics, a label listing the constituents it fuses. */
   fusesLabel?: string;
+  /** Persist an inline edit of the topic's name/description. */
   onEdit: (name: string, description: string) => void;
+  /** Delete the topic (or split it, for reconciled topics). */
   onDelete: () => void;
 }
 
+/**
+ * Editable card for one topic in the topic-modelling step.
+ *
+ * Renders the topic's name and description with inline edit (validated so both
+ * stay non-empty) and a confirm-first delete. Raw topics show a selection
+ * checkbox for merging; reconciled topics instead show which topics they fuse,
+ * and deleting one splits it back into its constituents.
+ *
+ * @param props - See {@link TopicCardProps}.
+ */
 export function TopicCard({
   topic,
   index,

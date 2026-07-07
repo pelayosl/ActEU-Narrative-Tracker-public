@@ -1,3 +1,8 @@
+/**
+ * Line chart of each topic's document count over time.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useMemo } from "react";
@@ -15,19 +20,34 @@ import {
 import type { TopicTimeSeries } from "@/types/api";
 import type { TopicSeriesMeta } from "./topic-colors";
 
+/** Props for {@link TopicEvolutionChart}. */
 interface TopicEvolutionChartProps {
+  /** One time series per topic. */
   data: TopicTimeSeries[];
+  /** Topic display metadata (value, label, colour) for legend and lines. */
   topics: TopicSeriesMeta[];
 }
 
-// Reformat ISO dates (yyyy-mm-dd) to dd/mm/yyyy so the axis matches the query panel.
+/**
+ * Reformat ISO dates (`yyyy-mm-dd`) as `dd/mm/yyyy` to match the query panel.
+ *
+ * @param value - An ISO date string (or any value; passed through if unmatched).
+ * @returns The reformatted date, or the stringified input if it does not match.
+ */
 function formatDate(value: string | number): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
   return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
 }
 
-// One line per topic: X = day, Y = document count. Series are merged into a single
-// row per date, keyed by topic value, so missing days render as gaps.
+/**
+ * Multi-line chart with one line per topic (X = day, Y = document count).
+ *
+ * The per-topic series are pivoted into a single row per date keyed by topic
+ * value, so missing days render as gaps. Shows an empty-state message when no
+ * documents matched.
+ *
+ * @param props - See {@link TopicEvolutionChartProps}.
+ */
 export function TopicEvolutionChart({ data, topics }: TopicEvolutionChartProps) {
   const rows = useMemo(() => {
     const byDate = new Map<string, Record<string, string | number>>();

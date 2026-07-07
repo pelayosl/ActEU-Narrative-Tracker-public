@@ -1,3 +1,14 @@
+/**
+ * Typed client for the FastAPI backend, used from the browser.
+ *
+ * All requests go through the Next.js proxy route (`app/api/backend/[...path]`),
+ * so there is no CORS and the browser only ever calls same-origin `/api/backend`.
+ * The {@link api} object is the single entry point; every method is a thin
+ * wrapper over {@link request} that supplies the path, verb and body and returns
+ * the parsed, typed response. Failures throw {@link ApiError}.
+ *
+ * @packageDocumentation
+ */
 import type {
   AuthToken,
   Dashboard,
@@ -11,35 +22,71 @@ import type {
   VisualisationQuery,
 } from "@/types/api";
 
-// Browser calls go through the Next.js proxy (src/app/api/backend/[...path]/route.ts) — no CORS.
+/** Same-origin base path; browser calls are proxied to the backend (no CORS). */
 const BASE_URL = "/api/backend";
 
+/** Error thrown for any non-2xx backend response, carrying the HTTP status. */
 export class ApiError extends Error {
+  /**
+   * @param status - The HTTP status code of the failed response.
+   * @param message - Human-readable error detail.
+   */
   constructor(public readonly status: number, message: string) {
     super(message);
     this.name = "ApiError";
   }
 }
 
-// The backend returns 503 when MongoDB is unreachable (see app/main.py). The UI
-// uses this to tell the user the database is down rather than blaming their query.
+/**
+ * Whether an error represents an unreachable database.
+ *
+ * The backend returns 503 when MongoDB is down (see `app/main.py`); the UI uses
+ * this to tell the user the database is unavailable rather than blaming their query.
+ *
+ * @param error - Any caught value.
+ * @returns True if `error` is an {@link ApiError} with status 503.
+ */
 export function isDatabaseUnavailable(error: unknown): boolean {
   return error instanceof ApiError && error.status === 503;
 }
 
+/** User-facing message shown when the database is unavailable (503). */
 export const DB_UNAVAILABLE_MESSAGE =
   "The database is currently unavailable. Please try again in a few moments.";
 
-// Sentinel relayed from the NextAuth authorize() callback (see lib/auth.ts) to the
-// login form via NextAuth's res.error, so login can show the DB-down message on a 503.
-// Lives here (client-safe) so the client doesn't import the server-only auth module.
+/**
+ * Sentinel relayed from the NextAuth `authorize()` callback (see `lib/auth.ts`)
+ * to the login form via NextAuth's `res.error`, so login can show the DB-down
+ * message on a 503. Declared here (client-safe) so the client need not import
+ * the server-only auth module.
+ */
 export const DB_UNAVAILABLE_ERROR = "DatabaseUnavailable";
 
-// Picks the DB-down message for a 503, otherwise the caller's context-specific fallback.
+/**
+ * Resolve the message to display for a failed request.
+ *
+ * @param error - The caught error.
+ * @param fallback - Context-specific message to use when it is not a 503.
+ * @returns The DB-down message for a 503, otherwise `fallback`.
+ */
 export function errorMessage(error: unknown, fallback: string): string {
   return isDatabaseUnavailable(error) ? DB_UNAVAILABLE_MESSAGE : fallback;
 }
 
+/**
+ * Perform a JSON request against the backend proxy and parse the response.
+ *
+ * Sets the JSON content type, attaches a bearer token when supplied, and throws
+ * {@link ApiError} on any non-2xx status. Empty responses (204 or
+ * `content-length: 0`, e.g. DELETE) resolve to `undefined`.
+ *
+ * @typeParam T - Expected response body type.
+ * @param path - Path appended to {@link BASE_URL} (e.g. `/projects`).
+ * @param init - Additional `fetch` options (method, body, extra headers).
+ * @param token - Optional bearer token for authenticated endpoints.
+ * @returns The parsed response body typed as `T`.
+ * @throws {@link ApiError} if the response status is not ok.
+ */
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
@@ -59,6 +106,15 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   return res.json() as Promise<T>;
 }
 
+/**
+ * The backend API surface, grouped by domain (auth, projects, classifiers,
+ * search, topic modelling, classification, visualisation).
+ *
+ * Every method returns a promise of the typed response and accepts an optional
+ * bearer `token`; endpoints that mutate or read user data require it. Methods
+ * returning `{ job_id }` start asynchronous Celery jobs that are polled or
+ * streamed via the job endpoints (see `lib/use-job.ts`).
+ */
 export const api = {
   // Auth
   login: (username: string, password: string) =>

@@ -1,3 +1,8 @@
+/**
+ * Grouped bar chart comparing topic presence across languages.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useMemo } from "react";
@@ -15,13 +20,22 @@ import {
 import type { TopicLanguageBreakdown } from "@/types/api";
 import type { TopicSeriesMeta } from "./topic-colors";
 
+/** Props for {@link LanguageBreakdown}. */
 interface LanguageBreakdownProps {
+  /** Per-topic language counts. */
   data: TopicLanguageBreakdown[];
+  /** Topic display metadata (value, label, colour) for legend and bars. */
   topics: TopicSeriesMeta[];
 }
 
-// Grouped horizontal bars: one row per language, one bar per topic. Counts are
-// pivoted so each row carries a value per topic.
+/**
+ * Grouped horizontal bar chart: one row per language, one bar per topic.
+ *
+ * Language codes are rendered as display names where possible, and the per-topic
+ * counts are pivoted so each language row carries a value per topic.
+ *
+ * @param props - See {@link LanguageBreakdownProps}.
+ */
 export function LanguageBreakdown({ data, topics }: LanguageBreakdownProps) {
   const languageLabel = useMemo(() => {
     try {

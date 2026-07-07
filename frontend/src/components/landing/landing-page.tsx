@@ -1,3 +1,8 @@
+/**
+ * Public marketing landing page for the ActEU Narrative Tracker.
+ *
+ * @packageDocumentation
+ */
 import Link from "next/link";
 import {
   Search,
@@ -56,6 +61,11 @@ const PIPELINE_STEPS = [
   { n: "4", label: "Visualise" },
 ];
 
+/**
+ * Static, public-facing landing page: navigation, hero, an "about ActEU"
+ * section, feature cards, the four-stage pipeline overview, country coverage, a
+ * call to action and the footer. Rendered at both `/` and `/home`.
+ */
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-ink">

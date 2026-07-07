@@ -1,3 +1,8 @@
+/**
+ * Chrome for authenticated pages: responsive sidebar, header and content area.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useEffect } from "react";
@@ -5,11 +10,22 @@ import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { useUiStore } from "@/stores/ui-store";
 
-// Below Tailwind's `lg` breakpoint (1024px) the sidebar can no longer sit
-// alongside the content without forcing a horizontal scrollbar, so it switches
-// to an overlay that hovers over the content instead of pushing it aside.
+/**
+ * Below Tailwind's `lg` breakpoint (1024px) the sidebar can no longer sit
+ * alongside the content without forcing a horizontal scrollbar, so it switches
+ * to an overlay that hovers over the content instead of pushing it aside.
+ */
 const NARROW_QUERY = "(max-width: 1023px)";
 
+/**
+ * Frame every protected page with the {@link Sidebar} and {@link Header}.
+ *
+ * Tracks the viewport via a media query to toggle the narrow/overlay mode
+ * (auto-collapsing the sidebar when narrow), dims and closes the overlay on
+ * backdrop click, and closes it on Escape for keyboard accessibility.
+ *
+ * @param props - Component props; `children` is the page content rendered in the main area.
+ */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const isNarrow = useUiStore((s) => s.isNarrow);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);

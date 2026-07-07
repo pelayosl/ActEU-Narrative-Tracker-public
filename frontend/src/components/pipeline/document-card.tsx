@@ -1,9 +1,25 @@
+/**
+ * Card previewing a single search-result document.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { cn } from "@/lib/utils";
 import type { DocumentSummary } from "@/types/api";
 import { PlatformBadge } from "./platform-badge";
 
+/**
+ * Show a document's platform, language, date, headline, excerpt and relevant
+ * topics. Optionally selectable/clickable (keyboard-accessible when `onClick`
+ * is provided) to support multi-select in the search step.
+ *
+ * @param props - Component props: `doc` (the document summary to render),
+ *   `selected` (whether the card is shown as selected), `onClick` (activation
+ *   handler that makes the card interactive) and `resolveTopic` (maps a
+ *   `relevant_topic` value to its display label; core topics arrive as slugs,
+ *   defaults to the identity function).
+ */
 export function DocumentCard({
   doc,
   selected = false,

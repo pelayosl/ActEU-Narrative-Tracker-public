@@ -1,5 +1,14 @@
-// Stable colour assignment for topics, shared across all visualiser charts so a
-// topic keeps the same colour everywhere. First three match the mockup (red, ink, grey).
+/**
+ * Shared topic colour palette and the chart-series metadata type.
+ *
+ * @packageDocumentation
+ */
+
+/**
+ * Stable colour assignment for topics, shared across all visualiser charts so a
+ * topic keeps the same colour everywhere. Indexed by the topic's position in the
+ * query; the first three match the mockup (red, ink, grey).
+ */
 export const TOPIC_COLORS = [
   "#C8102E", // ActEU red
   "#1A1A1A", // ink
@@ -11,9 +20,12 @@ export const TOPIC_COLORS = [
   "#DB2777", // pink
 ];
 
-// A query topic resolved for charting: its submitted identifier, display name, colour.
+/** A query topic resolved for charting: submitted identifier, display name, colour. */
 export interface TopicSeriesMeta {
-  value: string; // core label or subtopic topic_id, matches Dashboard `topic` fields
-  label: string; // display name
+  /** Core label or subtopic `topic_id`; matches the Dashboard `topic` fields. */
+  value: string;
+  /** Human-readable name shown in legends and tooltips. */
+  label: string;
+  /** Hex colour assigned from {@link TOPIC_COLORS}. */
   color: string;
 }

@@ -1,3 +1,8 @@
+/**
+ * `/projects` route: the project library and entry point to new pipelines.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -5,6 +10,10 @@ import { ProjectList } from "@/components/projects/project-list";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/stores/project-store";
 
+/**
+ * List the user's projects and offer "+ New Pipeline", which clears the active
+ * project (so the pipeline shows its selector) and navigates to `/pipeline`.
+ */
 export default function ProjectsPage() {
   const router = useRouter();
   const setActiveProject = useProjectStore((s) => s.setActiveProject);

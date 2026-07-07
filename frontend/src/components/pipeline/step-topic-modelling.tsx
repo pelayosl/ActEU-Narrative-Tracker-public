@@ -1,3 +1,8 @@
+/**
+ * Pipeline Step 2: review, edit, merge and reconcile generated topics.
+ *
+ * @packageDocumentation
+ */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -13,10 +18,28 @@ import { usePipelineStore } from "@/stores/pipeline-store";
 import { useProjectStore } from "@/stores/project-store";
 import type { Topic } from "@/types/api";
 
+/**
+ * The generation ids a topic resolves to (its origins, or its own id if raw).
+ *
+ * @param topic - The topic to resolve.
+ * @returns The generation ids backing this topic.
+ */
 function generationIds(topic: Topic): string[] {
   return topic.origin_topic_ids.length > 0 ? topic.origin_topic_ids : [topic.topic_id];
 }
 
+/**
+ * Topic-modelling step spanning generation and reconciliation.
+ *
+ * Streams the BERTopic generation and LLM reconciliation jobs via
+ * {@link useJob}, showing a {@link JobProgress} bar while each runs. Between
+ * jobs it lists editable {@link TopicCard}s: raw topics can be renamed, deleted
+ * or merged (via {@link MergeDialog}); reconciliation can target a selection or
+ * all topics, with unselected ones passed through unchanged. Reconciled topics
+ * show what they fuse and split back into constituents on delete. From here the
+ * user accepts topics (advancing to labelling), skips reconciliation, or cancels.
+ * Surfaces informational notices such as the LLM being unavailable.
+ */
 export function StepTopicModelling() {
   const { data: session } = useSession();
   const activeProject = useProjectStore((s) => s.activeProject);
