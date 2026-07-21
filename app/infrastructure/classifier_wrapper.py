@@ -36,6 +36,8 @@ class ClassifierWrapper:
                 epoch=25,
                 lr=0.1,
                 wordNgrams=2,
+                minn=3,
+                maxn=6,
                 verbose=0,
             )
         finally:
