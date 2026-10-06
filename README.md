@@ -8,6 +8,9 @@ Final Degree Project (TFG), School of Computer Engineering, University of Oviedo
 
 Should you want to read a copy of the project's official document, please contact me through my email or LinkedIn account.
 
+>[!NOTE]
+>Dataset files are required to populate the database. These are not provided (yet) as ActEU's dataset is pending publication. Once it has been published, you will find the data inside `db/*/` directories. You may create artificial samples of the data to test this project.
+
 ---
 
 ## The problem
